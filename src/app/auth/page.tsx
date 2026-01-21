@@ -2,6 +2,14 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  GoogleAuthProvider,
+  OAuthProvider,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+} from "firebase/auth";
+import { auth } from "@/lib/firebase/client";
 
 function isValidEmail(value: string) {
   // deliberately simple + practical (avoids false negatives)
@@ -80,6 +88,8 @@ export default function AuthPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
 
+  const router = useRouter();
+
   const canSubmit = useMemo(() => {
     const okEmail = isValidEmail(email);
     const okPw = password.trim().length >= 8;
@@ -106,36 +116,60 @@ export default function AuthPage() {
       setStatus("error");
       return;
     }
-
-    // Placeholder auth flow.
-    // Wire later to Firebase Auth signInWithEmailAndPassword.
     setStatus("authing");
 
     try {
-      await new Promise((r) => setTimeout(r, 700));
+      await signInWithEmailAndPassword(auth, email.trim(), password);
       setStatus("done");
-    } catch {
+      router.push("/app");
+    } catch (err: any) {
+      const code = String(err?.code ?? "");
       setStatus("error");
-      setError("Sign-in failed. Please try again.");
+      if (code.includes("auth/invalid-credential") || code.includes("auth/wrong-password")) {
+        setError("Incorrect email or password.");
+      } else if (code.includes("auth/user-not-found")) {
+        setError("No account found for that email.");
+      } else if (code.includes("auth/too-many-requests")) {
+        setError("Too many attempts. Try again later.");
+      } else {
+        setError("Sign-in failed. Please try again.");
+      }
     }
   }
 
   async function onProviderSignIn(provider: "google" | "apple") {
     setError(null);
     setStatus("authing");
-
-    // Placeholder provider flow.
-    // Wire later to Firebase Auth (Google / Apple).
     try {
-      await new Promise((r) => setTimeout(r, 700));
+      if (provider === "google") {
+        const p = new GoogleAuthProvider();
+        await signInWithPopup(auth, p);
+      } else {
+        // Apple on web uses OAuthProvider("apple.com") via popup.
+        const p = new OAuthProvider("apple.com");
+        await signInWithPopup(auth, p);
+      }
+
       setStatus("done");
-    } catch {
+      router.push("/app");
+    } catch (err: any) {
+      const code = String(err?.code ?? "");
       setStatus("error");
-      setError(
-        provider === "google"
-          ? "Google sign-in failed. Please try again."
-          : "Apple sign-in failed. Please try again.",
-      );
+
+      // Common cases: blocked popup, cancelled flow, provider not enabled
+      if (code.includes("auth/popup-closed-by-user")) {
+        setError("Sign-in cancelled.");
+      } else if (code.includes("auth/popup-blocked")) {
+        setError("Popup blocked. Allow popups then try again.");
+      } else if (code.includes("auth/operation-not-allowed")) {
+        setError("This sign-in method isn’t enabled in Firebase yet.");
+      } else {
+        setError(
+          provider === "google"
+            ? "Google sign-in failed. Please try again."
+            : "Apple sign-in failed. Please try again.",
+        );
+      }
     }
   }
 
@@ -317,10 +351,9 @@ export default function AuthPage() {
 
                 {status === "done" ? (
                   <div className="rounded-xl border border-white/15 bg-white/5 px-4 py-3">
-                    <div className="text-sm font-semibold">Signed in (mock)</div>
+                    <div className="text-sm font-semibold">Signed in</div>
                     <div className="mt-1 text-sm text-white/80">
-                      Auth is currently stubbed. Next step: wire Firebase Auth
-                      and redirect into your dashboard.
+                      You're signed in. Redirecting you to the dashboard…
                     </div>
                     <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                       <Link className="btn btn-primary w-full sm:w-auto" href="/app">
