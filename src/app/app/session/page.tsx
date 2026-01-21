@@ -4,11 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { seedQuestions } from "@/lib/questionSeed";
 import { addAttempt, attemptFromQuestion } from "@/lib/storage";
+import { composeSessionPool } from "@/lib/lrareKit";
+import { applyReviewToItem, getItemMetas } from "@/lib/engineStore";
 
 type Phase = "question" | "autopsy" | "done";
 
 export default function SessionPage() {
-  const [index, setIndex] = useState(0);
+  const [pool, setPool] = useState<string[]>([]);
+  const [poolIndex, setPoolIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("question");
 
   const [selected, setSelected] = useState<number | null>(null);
@@ -17,16 +20,50 @@ export default function SessionPage() {
 
   const startRef = useRef<number>(0);
 
-  const q = seedQuestions[index];
-  const isLast = index === seedQuestions.length - 1;
+  useEffect(() => {
+    // Build a session pool from due + near-due items (fallback to the first N).
+    const existing = getItemMetas();
+
+    const items = seedQuestions.map((sq) => {
+      const found = existing.find((x) => x.id === sq.id);
+      return (
+        found ?? {
+          id: sq.id,
+          dueAt: new Date().toISOString(),
+          state: {
+            stability: 1,
+            difficulty: 0.6,
+            reps: 0,
+            lapses: 0,
+            avgResponseMs: 0,
+            confBias: 0,
+          },
+          tags: [sq.module, sq.topic, sq.subTopic],
+          authorityIDs: [],
+        }
+      );
+    });
+
+    const selected = composeSessionPool(items, new Date(), 10);
+    const fallback = seedQuestions.slice(0, 10).map((s) => s.id);
+
+    setPool(selected.length ? selected : fallback);
+    setPoolIndex(0);
+  }, []);
+
+  const currentId = pool[poolIndex] ?? seedQuestions[0]?.id;
+  const q =
+    seedQuestions.find((x) => x.id === currentId) ?? seedQuestions[0];
+  const isLast = poolIndex >= pool.length - 1;
 
   useEffect(() => {
+    if (!q) return;
     startRef.current = performance.now();
     setSelected(null);
     setConfidence(3);
     setRationale("");
     setPhase("question");
-  }, [index]);
+  }, [poolIndex, q]);
 
   const isCorrect = useMemo(() => {
     if (selected === null) return false;
@@ -52,11 +89,23 @@ export default function SessionPage() {
       }),
     );
 
+    applyReviewToItem({
+      id: q.id,
+      signal: {
+        correct: (selected ?? 0) === q.answerIndex,
+        confidence,
+        latencyMs,
+        rationaleChars: rationale.trim().length,
+      },
+      tags: [q.module, q.topic, q.subTopic],
+      authorityIDs: [],
+    });
+
     if (isLast) {
       setPhase("done");
       return;
     }
-    setIndex((i) => i + 1);
+    setPoolIndex((i) => i + 1);
   }
 
   if (phase === "done") {
@@ -79,13 +128,29 @@ export default function SessionPage() {
     );
   }
 
+  if (!q) {
+    return (
+      <div className="card">
+        <div className="text-sm font-semibold text-white">No questions</div>
+        <div className="mt-2 text-sm text-white/70">
+          Seed questions are missing. Please check your question seed file.
+        </div>
+        <div className="mt-5">
+          <Link href="/app" className="btn btn-primary w-full sm:w-auto">
+            Back to dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
       <div className="card">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-xs text-white/60">
-              Question {index + 1} of {seedQuestions.length}
+              Question {poolIndex + 1} of {pool.length || seedQuestions.length}
             </div>
             <div className="mt-2 text-lg font-semibold tracking-tight text-white">
               {q.question}

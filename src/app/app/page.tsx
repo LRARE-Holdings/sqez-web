@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppCard, AppCardSoft } from "@/components/ui/AppCard";
 import { getAttempts } from "@/lib/storage";
-import { computeMetrics, computeWebScore } from "@/lib/metrics";
+import { computeMetrics } from "@/lib/metrics";
+import { getItemMetas, summarizeEngine } from "@/lib/engineStore";
 
 function Badge({ children }: { children: React.ReactNode }) {
   return (
@@ -21,17 +22,26 @@ function formatPercent01(v: number) {
 
 export default function DashboardPage() {
   const [attemptCount, setAttemptCount] = useState(0);
-  const [metrics, setMetrics] = useState(() =>
-    computeMetrics([]),
-  );
+  const [metrics, setMetrics] = useState(() => computeMetrics([]));
+  const [engineSummary, setEngineSummary] = useState(() => ({
+    avgStability: 0,
+    avgDifficulty: 0,
+    dueCount: 0,
+  }));
 
   useEffect(() => {
     const attempts = getAttempts();
     setAttemptCount(attempts.length);
     setMetrics(computeMetrics(attempts));
+
+    const items = getItemMetas();
+    setEngineSummary(summarizeEngine(items));
   }, []);
 
-  const score = useMemo(() => computeWebScore(metrics), [metrics]);
+  const engineScore = Math.min(
+    100,
+    Math.round(engineSummary.avgStability * 10),
+  );
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
@@ -128,26 +138,26 @@ export default function DashboardPage() {
       <div className="grid gap-6">
         <AppCard
           title="Score"
-          subtitle="Web score placeholder until LRAREKit is fully ported."
+          subtitle="Derived from your learning stability and review history."
           right={<span className="chip">Engine wiring next</span>}
         >
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
             <div className="text-xs text-white/60">Score</div>
             <div className="mt-2 flex items-end justify-between gap-4">
               <div className="text-4xl font-semibold tracking-tight text-white">
-                {score}
+                {engineScore}
               </div>
               <div className="text-xs text-white/60">
-                Based on streak, accuracy,
+                Based on your LRARE learning state
                 <br />
-                confidence, volume.
+                (stability & scheduling).
               </div>
             </div>
 
             <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-white/10">
               <div
                 className="h-full rounded-full bg-white/70"
-                style={{ width: `${score}%` }}
+                style={{ width: `${engineScore}%` }}
               />
             </div>
           </div>
@@ -155,6 +165,14 @@ export default function DashboardPage() {
 
         <AppCard title="At a glance" subtitle="Fast signals for today.">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+              <div className="text-xs text-white/60">Due now</div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                {engineSummary.dueCount}
+              </div>
+              <div className="mt-2 text-xs text-white/60">items</div>
+            </div>
+
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
               <div className="text-xs text-white/60">Streak</div>
               <div className="mt-2 text-2xl font-semibold tracking-tight text-white">
