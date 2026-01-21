@@ -163,7 +163,7 @@ export default function AuthPage() {
             aria-label="SQEz home"
           >
             <img
-              src="/SQEz-logo.svg"
+              src="/sqez-logo.svg"
               alt="SQEz"
               className="h-5 w-auto"
             />

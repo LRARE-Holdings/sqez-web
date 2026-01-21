@@ -40,7 +40,7 @@ export function Sidebar({
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between px-4 py-4">
           <Link href="/" className="flex items-center gap-3" aria-label="SQEz home">
-            <img src="/SQEz-logo.svg" alt="SQEz" className="h-5 w-auto" />
+            <img src="/sqez-logo.svg" alt="SQEz" className="h-5 w-auto" />
             <span className="sr-only">SQEz</span>
           </Link>
 

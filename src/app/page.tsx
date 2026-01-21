@@ -7,7 +7,7 @@ function Divider() {
 function Logo() {
   return (
     <Link href="/" className="flex items-center gap-3" aria-label="SQEz home">
-      <img src="/SQEz-logo.svg" alt="SQEz" className="h-5 w-auto" />
+      <img src="/sqez-logo.svg" alt="SQEz" className="h-5 w-auto" />
       <span className="sr-only">SQEz</span>
     </Link>
   );
