@@ -105,6 +105,75 @@ export default function DashboardPage() {
           </div>
         </AppCard>
 
+        <AppCard
+  title="Quickfire"
+  subtitle="Short, high-frequency reps. The default loop."
+  right={<Badge>{engineSummary.dueCount} due</Badge>}
+>
+  <div className="grid gap-3 sm:grid-cols-2">
+    <AppCardSoft className="px-4 py-4">
+      <div className="text-xs text-white/60">Start</div>
+      <div className="mt-2 text-sm text-white/80">
+        10 MCQs → Autopsy Mode → confidence check.
+      </div>
+      <div className="mt-4">
+        <Link href="/app/session" className="btn btn-primary w-full sm:w-auto">
+          Start Quickfire
+        </Link>
+      </div>
+    </AppCardSoft>
+
+    <AppCardSoft className="px-4 py-4">
+      <div className="text-xs text-white/60">Due now</div>
+      <div className="mt-2 text-sm text-white/80">
+        You have <span className="text-white">{engineSummary.dueCount}</span> items
+        due for reinforcement.
+      </div>
+      <div className="mt-4">
+        <Link href="/app/session" className="btn btn-outline w-full sm:w-auto">
+          Review due items
+        </Link>
+      </div>
+    </AppCardSoft>
+  </div>
+</AppCard>
+
+<AppCard title="Quick Actions" subtitle="Jump straight to what you need.">
+  <div className="grid gap-2 sm:grid-cols-2">
+    <Link
+      href="/app/learn"
+      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/7"
+    >
+      <div className="text-sm font-semibold text-white">Learn</div>
+      <div className="mt-1 text-xs text-white/60">Browse topics and drill down</div>
+    </Link>
+
+    <Link
+      href="/app/revise"
+      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/7"
+    >
+      <div className="text-sm font-semibold text-white">Revise</div>
+      <div className="mt-1 text-xs text-white/60">Quickfire + structured review</div>
+    </Link>
+
+    <Link
+      href="/app/progress"
+      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/7"
+    >
+      <div className="text-sm font-semibold text-white">Progress</div>
+      <div className="mt-1 text-xs text-white/60">Trends, weak areas, momentum</div>
+    </Link>
+
+    <Link
+      href="/app/account"
+      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/7"
+    >
+      <div className="text-sm font-semibold text-white">Account</div>
+      <div className="mt-1 text-xs text-white/60">Billing and settings</div>
+    </Link>
+  </div>
+</AppCard>
+
         <AppCard title="Insights" subtitle="Live insights will come from your engine next.">
           <div className="grid gap-3 sm:grid-cols-2">
             <AppCardSoft className="px-4 py-4">

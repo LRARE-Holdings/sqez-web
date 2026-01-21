@@ -11,16 +11,20 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   }
 }
 
-export function getItemMetas(): ItemMeta[] {
+export type StoredItemMeta = ItemMeta & {
+  state: LearnerState;
+};
+
+export function getItemMetas(): StoredItemMeta[] {
   if (typeof window === "undefined") return [];
-  return safeParse<ItemMeta[]>(window.localStorage.getItem(KEY), []);
+  return safeParse<StoredItemMeta[]>(window.localStorage.getItem(KEY), []);
 }
 
-export function saveItemMetas(items: ItemMeta[]) {
+export function saveItemMetas(items: StoredItemMeta[]) {
   window.localStorage.setItem(KEY, JSON.stringify(items));
 }
 
-export function upsertItemMeta(meta: ItemMeta) {
+export function upsertItemMeta(meta: StoredItemMeta) {
   const all = getItemMetas();
   const idx = all.findIndex((x) => x.id === meta.id);
   if (idx >= 0) all[idx] = meta;
@@ -32,18 +36,19 @@ export function ensureItemMeta(args: {
   id: string;
   tags: string[];
   authorityIDs: string[];
-}): ItemMeta {
+}): StoredItemMeta {
   const all = getItemMetas();
   const found = all.find((x) => x.id === args.id);
   if (found) return found;
 
-  const meta: ItemMeta = {
+  const meta: StoredItemMeta = {
     id: args.id,
     dueAt: new Date().toISOString(),
-    state: LRARE.defaultState(),
     tags: args.tags,
     authorityIDs: args.authorityIDs,
+    state: LRARE.defaultState(),
   };
+
   all.push(meta);
   saveItemMetas(all);
   return meta;
@@ -54,11 +59,16 @@ export function applyReviewToItem(args: {
   signal: ReviewSignal;
   tags: string[];
   authorityIDs: string[];
-}): ItemMeta {
-  const meta = ensureItemMeta({ id: args.id, tags: args.tags, authorityIDs: args.authorityIDs });
+}): StoredItemMeta {
+  const meta = ensureItemMeta({
+    id: args.id,
+    tags: args.tags,
+    authorityIDs: args.authorityIDs,
+  });
+
   const res = LRARE.apply(args.signal, meta.state, new Date());
 
-  const next: ItemMeta = {
+  const next: StoredItemMeta = {
     ...meta,
     state: res.updated,
     dueAt: res.nextDue.toISOString(),
@@ -70,13 +80,15 @@ export function applyReviewToItem(args: {
   return next;
 }
 
-export function summarizeEngine(items: ItemMeta[]) {
+export function summarizeEngine(items: StoredItemMeta[]) {
   if (items.length === 0) {
     return { avgStability: 0, avgDifficulty: 0, dueCount: 0 };
   }
+
   const now = Date.now();
   const avgStability = items.reduce((a, i) => a + i.state.stability, 0) / items.length;
   const avgDifficulty = items.reduce((a, i) => a + i.state.difficulty, 0) / items.length;
   const dueCount = items.filter((i) => new Date(i.dueAt).getTime() <= now).length;
+
   return { avgStability, avgDifficulty, dueCount };
 }

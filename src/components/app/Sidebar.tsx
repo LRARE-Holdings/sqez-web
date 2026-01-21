@@ -10,11 +10,10 @@ type NavItem = {
 };
 
 const NAV: NavItem[] = [
-  { href: "/app", label: "Dashboard", hint: "Today + insights" },
-  { href: "/app/session", label: "Session", hint: "Start / resume" },
-  { href: "/app/review", label: "Review", hint: "Autopsies + queue" },
-  { href: "/app/progress", label: "Progress", hint: "Trends + weak areas" },
-  { href: "/app/library", label: "Library", hint: "Topics / cases / statutes" },
+  { href: "/app", label: "Home", hint: "Dashboard" },
+  { href: "/app/learn", label: "Learn", hint: "Topics" },
+  { href: "/app/revise", label: "Revise", hint: "Quickfire + review" },
+  { href: "/app/progress", label: "Progress", hint: "Trends + insights" },
   { href: "/app/account", label: "Account", hint: "Billing + settings" },
 ];
 
@@ -34,7 +33,7 @@ export function Sidebar({
       className={[
         "h-full w-full",
         "border-r border-white/10",
-        "bg-white/[0.02]",
+        "bg-white/2",
       ].join(" ")}
     >
       <div className="flex h-full flex-col">

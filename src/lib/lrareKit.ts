@@ -19,6 +19,26 @@ export type NextDueResult = {
   nextDue: Date;
 };
 
+export type ItemMeta = {
+  id: string;
+  dueAt: string; // ISO
+  tags: string[];
+  authorityIDs: string[];
+};
+
+function clamp(x: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, x));
+}
+
+function shuffled<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export const LRARE = {
   alpha: 0.35,
   beta: 0.25,
@@ -28,9 +48,11 @@ export const LRARE = {
   p: 1.1,
 
   defaultState(): LearnerState {
+    // Mirrors the intent of Swift defaults:
+    // stability 0, difficulty 0.5, others 0.
     return {
-      stability: 1.0,
-      difficulty: LRARE.targetDifficulty,
+      stability: 0,
+      difficulty: 0.5,
       reps: 0,
       lapses: 0,
       avgResponseMs: 0,
@@ -38,90 +60,108 @@ export const LRARE = {
     };
   },
 
-  /**
-   * Ported from Engine.swift where visible.
-   * The `reps==0` branch is incomplete in the Swift file you uploaded,
-   * so we use a compatible initialization that preserves the downstream math.
-   */
   apply(signal: ReviewSignal, state: LearnerState, now: Date = new Date()): NextDueResult {
     const q = signal.correct ? 1.0 : 0.0;
-    const c = clamp01((signal.confidence - 1) / 4);
-    const r = clamp01(signal.rationaleChars / 140);
+
+    // Swift:
+    // c = max(0, min(1, (confidence-1)/4))
+    // r = max(0, min(1, rationaleChars/140))
+    let c = clamp((signal.confidence - 1.0) / 4.0, 0.0, 1.0);
+    const r = clamp(signal.rationaleChars / 140.0, 0.0, 1.0);
+
+    // Swift:
+    // sig = 0.55*q + 0.25*c + 0.20*r
     let sig = 0.55 * q + 0.25 * c + 0.20 * r;
 
+    // Swift:
+    // if latencyMs > 15000 { sig *= 0.8 }
     if (signal.latencyMs > 15_000) sig *= 0.8;
 
-    // --- Missing in uploaded Swift: reps==0 block + stability update logic.
-    // We implement a conservative, monotonic update:
-    // - stability increases with higher sig, decreases on wrong answers
-    // - uses alpha/beta, and respects difficulty.
     const next: LearnerState = { ...state };
 
+    // Swift:
+    // if reps == 0:
+    //   stability = clamp(1.5 + 2*difficulty, 0.3..365)
+    // else:
+    //   stability = stability * (1 + alpha*sig - beta*(1-sig))
+    //   stability = clamp(stability, 0.3..365)
     if (next.reps === 0) {
-      // sensible first-review baseline consistent with the rest of the engine
-      next.stability = 1.0;
-      next.difficulty = LRARE.targetDifficulty;
+      next.stability = clamp(1.5 + 2.0 * next.difficulty, 0.3, 365.0);
+    } else {
+      next.stability =
+        next.stability * (1.0 + LRARE.alpha * sig - LRARE.beta * (1.0 - sig));
+      next.stability = clamp(next.stability, 0.3, 365.0);
     }
 
-    // Stability update (placeholder until exact Swift branch is provided)
-    // More “quality” than difficulty -> stability increases.
-    const qualityGap = sig - next.difficulty; // [-1..1]
-    next.stability = clamp(next.stability * (1 + LRARE.alpha * qualityGap) + LRARE.beta * q, 0.2, 60);
-
-    // Exact from Swift (visible)
+    // Swift:
+    // difficulty += gamma*(targetDifficulty - sig)
+    // clamp 0.1..0.95
     next.difficulty += LRARE.gamma * (LRARE.targetDifficulty - sig);
     next.difficulty = clamp(next.difficulty, 0.1, 0.95);
 
+    // Swift:
+    // reps += 1; if !correct lapses += 1
     next.reps += 1;
     if (!signal.correct) next.lapses += 1;
 
+    // Swift:
+    // n = max(1, reps)
+    // avgResponseMs = (avgResponseMs*(n-1) + latency)/n
     const n = Math.max(1, next.reps);
     next.avgResponseMs =
       (next.avgResponseMs * (n - 1) + signal.latencyMs) / n;
 
+    // Swift:
+    // correctnessAsConf = correct ? 1 : 0
+    // biasSample = c - correctnessAsConf
+    // confBias = 0.8*confBias + 0.2*biasSample
     const correctnessAsConf = signal.correct ? 1.0 : 0.0;
     const biasSample = c - correctnessAsConf;
     next.confBias = 0.8 * next.confBias + 0.2 * biasSample;
 
-    // Exact from Swift (visible)
+    // Swift:
+    // intervalDays = k * pow(stability, p)
+    // nextDue = now + Int(intervalDays*86400) seconds
     const intervalDays = LRARE.k * Math.pow(next.stability, LRARE.p);
-    const nextDue = new Date(now.getTime() + intervalDays * 86_400 * 1000);
+    const nextDue = new Date(now.getTime() + Math.floor(intervalDays * 86_400) * 1000);
 
     return { updated: next, nextDue };
   },
 };
 
-export type ItemMeta = {
-  id: string;
-  dueAt: string; // ISO
-  state: LearnerState;
-  tags: string[];
-  authorityIDs: string[];
-};
-
-export function composeSessionPool(items: ItemMeta[], now: Date = new Date(), cap: number = 30): string[] {
+export function composeSessionPool(
+  items: ItemMeta[],
+  now: Date = new Date(),
+  cap: number = 30,
+): string[] {
   const nowMs = now.getTime();
-  const due = items.filter((i) => new Date(i.dueAt).getTime() <= nowMs);
-  const nearDue = items.filter((i) => {
-    const t = new Date(i.dueAt).getTime();
+  const due = items.filter((m) => new Date(m.dueAt).getTime() <= nowMs);
+  const nearDue = items.filter((m) => {
+    const t = new Date(m.dueAt).getTime();
     return t > nowMs && t <= nowMs + 36_000 * 1000;
   });
 
-  const pool = shuffle([...due, ...nearDue]).slice(0, cap);
-  return pool.map((p) => p.id);
-}
+  // Swift:
+  // seed = (due + nearDue.shuffled().prefix(max(5, cap/5))).shuffled()
+  const mixed = shuffled([...due, ...nearDue]);
+  const take = Math.max(5, Math.floor(cap / 5));
+  const seed = shuffled(mixed.slice(0, take));
 
-function clamp01(x: number) {
-  return clamp(x, 0, 1);
-}
-function clamp(x: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, x));
-}
-function shuffle<T>(arr: T[]) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+  // Swift:
+  // avoid repeating same tag in a row (with a skip rule on odd positions)
+  const result: string[] = [];
+  let lastTags: string[] = [];
+
+  for (const meta of seed) {
+    const sameTagInRow =
+      lastTags.length > 0 && meta.tags.some((t) => lastTags.includes(t));
+    if (sameTagInRow && result.length % 2 === 1) continue;
+
+    result.push(meta.id);
+    lastTags = meta.tags;
+
+    if (result.length >= cap) break;
   }
-  return a;
+
+  return result;
 }
