@@ -166,22 +166,6 @@ function SessionCard() {
         </div>
       </div>
 
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-        <Link
-          href="/app"
-          className="btn btn-primary w-full sm:w-auto"
-          aria-label="Start today's SQEz session"
-        >
-          Start today’s session
-        </Link>
-        <Link
-          href="/auth"
-          className="btn btn-ghost w-full sm:w-auto"
-          aria-label="Sign in to SQEz"
-        >
-          Sign in
-        </Link>
-      </div>
 
       <div className="mt-3 text-xs leading-relaxed text-white/70">
         SQEz is a companion tool. It is not a prep-course replacement.
@@ -218,7 +202,7 @@ export default function HomePage() {
               Sign in
             </Link>
             <Link href="/app" className="btn btn-primary hidden px-3 py-2 sm:inline-flex">
-              Start
+              Get Started
             </Link>
           </div>
         </div>
@@ -248,7 +232,7 @@ export default function HomePage() {
 
             <div className="mt-6 flex flex-col gap-2 sm:flex-row">
               <Link href="/app" className="btn btn-primary w-full sm:w-auto">
-                Start today’s session
+                Get started today!
               </Link>
               <Link href="#how-it-works" className="btn btn-ghost w-full sm:w-auto">
                 How it works
@@ -383,9 +367,6 @@ export default function HomePage() {
                     </Link>
                   </div>
 
-                  <div className="mt-3 text-xs text-white/70">
-                    Prefer monthly? It’s below — annual is recommended.
-                  </div>
                 </div>
               </div>
 
