@@ -4,13 +4,21 @@ import { useRouter } from "next/navigation";
 import { OnboardingShell, OptionButton } from "@/components/onboarding/OnboardingShell";
 import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import type { StudyPattern } from "@/lib/onboarding/store";
+import { writeOnboarding } from "@/lib/onboarding/firestore";
 
 export default function TimePage() {
   const router = useRouter();
   const { setAnswers } = useOnboarding();
 
-  function pick(studyPattern: StudyPattern) {
+  async function pick(studyPattern: StudyPattern) {
     setAnswers({ studyPattern });
+
+    try {
+      await writeOnboarding({ studyPattern });
+    } catch (e) {
+      console.error("writeOnboarding(studyPattern) failed", e);
+    }
+
     router.push("/onboarding/funding");
   }
 

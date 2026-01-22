@@ -1,14 +1,33 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { OnboardingShell, OptionButton } from "@/components/onboarding/OnboardingShell";
 import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import type { LegalBackground, Location } from "@/lib/onboarding/store";
 
+import { writeOnboarding } from "@/lib/onboarding/firestore";
+
 export default function BackgroundPage() {
   const router = useRouter();
   const { answers, setAnswers } = useOnboarding();
+
+  useEffect(() => {
+    // Persist non-empty onboarding answers to Firestore
+    const patch: Record<string, unknown> = {};
+
+    if (answers.location) {
+      // Map Location enum to Firestore field name
+      patch.homeCountry = answers.location;
+    }
+    if (answers.legalBackground) {
+      patch.universityBackground = answers.legalBackground;
+    }
+    // Only write if there is something to persist
+    if (Object.keys(patch).length === 0) return;
+
+    void writeOnboarding(patch).catch((e) => console.error("writeOnboarding failed", e));
+  }, [answers.location, answers.legalBackground]);
 
   const [university, setUniversity] = useState(answers.university ?? "");
   const canContinue = useMemo(() => Boolean(answers.location && answers.legalBackground), [answers]);
@@ -20,8 +39,17 @@ export default function BackgroundPage() {
     setAnswers({ legalBackground });
   }
 
-  function next() {
-    setAnswers({ university: university.trim() || undefined });
+  async function next() {
+    const uni = university.trim() || "";
+    setAnswers({ university: uni || undefined });
+
+    // Persist university to Firestore (single source of truth)
+    try {
+      await writeOnboarding({ university: uni });
+    } catch (e) {
+      console.error("writeOnboarding(university) failed", e);
+    }
+
     router.push("/onboarding/plan");
   }
 

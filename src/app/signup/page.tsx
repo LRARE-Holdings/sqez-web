@@ -9,13 +9,63 @@ import {
   createUserWithEmailAndPassword,
   signInWithPopup,
 } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
+import { auth, db } from "@/lib/firebase/client";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
+
 type Status = "idle" | "authing" | "done" | "error";
+
+async function ensureUserDoc(params: { uid: string; email: string | null }) {
+  const { uid, email } = params;
+
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
+
+  const base = {
+    updatedAt: serverTimestamp(),
+    email: email ?? "",
+  };
+
+  if (!snap.exists()) {
+    await setDoc(ref, {
+      ...base,
+      createdAt: serverTimestamp(),
+
+      // Profile
+      firstName: "",
+      lastName: "",
+
+      // Notifications
+      fcmToken: "",
+      fcmTokenUpdatedAt: serverTimestamp(),
+
+      // Security
+      mfaEnrolled: false,
+
+      // Onboarding
+      onboardingCompleted: false,
+      onboarding: {
+        hoursPerWeek: 0,
+        persona: "",
+        targetExamDate: null,
+      },
+
+      // Billing / entitlement
+      isPro: false,
+      subscriptionTier: "free",
+      proUpdatedAt: serverTimestamp(),
+      lastTransactionID: "",
+    });
+    return;
+  }
+
+  // Merge-only to avoid clobbering existing data
+  await setDoc(ref, base, { merge: true });
+}
 
 function ProviderButton({
   label,
@@ -110,6 +160,16 @@ export default function SignupPage() {
 
     try {
       await createUserWithEmailAndPassword(auth, email.trim(), password);
+
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          await ensureUserDoc({ uid: user.uid, email: user.email });
+        } catch (e) {
+          console.error("ensureUserDoc failed", e);
+        }
+      }
+
       setStatus("done");
       router.push(next ? decodeURIComponent(next) : "/onboarding");
     } catch (err: any) {
@@ -138,6 +198,15 @@ export default function SignupPage() {
       } else {
         const p = new OAuthProvider("apple.com");
         await signInWithPopup(auth, p);
+      }
+
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          await ensureUserDoc({ uid: user.uid, email: user.email });
+        } catch (e) {
+          console.error("ensureUserDoc failed", e);
+        }
       }
 
       setStatus("done");

@@ -1,42 +1,109 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, onSnapshot } from "firebase/firestore";
 
-const ONBOARDING_KEY = "sqez_onboarding_v1";
-const COMPLETE_KEY = "sqez_onboarding_complete";
+import { auth, db } from "@/lib/firebase/client";
 
-export default function OnboardingGate({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+type GateState =
+  | { kind: "loading" }
+  | { kind: "authed"; onboardingCompleted: boolean }
+  | { kind: "unauthed" };
+
+function isPublicPath(pathname: string) {
+  // Public pages: landing + legal + auth + onboarding itself
+  if (pathname === "/") return true;
+  if (pathname.startsWith("/legal")) return true;
+
+  if (pathname.startsWith("/auth")) return true;
+  if (pathname.startsWith("/login")) return true;
+  if (pathname.startsWith("/signup")) return true;
+
+  // Onboarding pages must never gate themselves
+  if (pathname.startsWith("/onboarding")) return true;
+
+  return false;
+}
+
+function isAppExemptPath(pathname: string) {
+  // Allow Stripe return confirmation page through even if onboarding isn't complete
+  if (pathname.startsWith("/app/upgrade")) return true;
+  return false;
+}
+
+export function OnboardingGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
+  const [state, setState] = useState<GateState>({ kind: "loading" });
+
   useEffect(() => {
-    // Never gate the onboarding routes themselves
-    if (pathname.startsWith("/onboarding")) return;
+    // If you're on a public page, do not gate at all.
+    if (isPublicPath(pathname)) return;
 
-    // Never gate auth pages
-    if (pathname.startsWith("/login") || pathname.startsWith("/auth")) return;
+    // For /app routes we require auth + onboardingCompleted (except upgrade page)
+    if (!pathname.startsWith("/app")) return;
 
-    // Read onboarding state
-    let hasAnswers = false;
-    let isComplete = false;
+    if (isAppExemptPath(pathname)) return;
 
-    try {
-      hasAnswers = Boolean(localStorage.getItem(ONBOARDING_KEY));
-      isComplete = localStorage.getItem(COMPLETE_KEY) === "true";
-    } catch {
-      // ignore
-    }
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setState({ kind: "unauthed" });
+        const next = encodeURIComponent(pathname);
+        router.replace(`/auth?next=${next}`);
+        return;
+      }
 
-    // If onboarding not completed, redirect
-    if (!isComplete) {
-      router.replace("/onboarding");
-    }
+      // User is authed → watch Firestore for onboardingCompleted
+      const userRef = doc(db, "users", user.uid);
+
+      const unsubDoc = onSnapshot(
+        userRef,
+        (snap) => {
+          const data = snap.data() as any;
+          const onboardingCompleted = Boolean(data?.onboardingCompleted);
+
+          setState({ kind: "authed", onboardingCompleted });
+
+          if (!onboardingCompleted) {
+            router.replace("/onboarding");
+          }
+        },
+        (err) => {
+          console.error("OnboardingGate snapshot error", err);
+          // If we can't read user doc, treat as not onboarded to be safe
+          setState({ kind: "authed", onboardingCompleted: false });
+          router.replace("/onboarding");
+        },
+      );
+
+      // cleanup doc listener when auth changes
+      return () => unsubDoc();
+    });
+
+    return () => unsubAuth();
   }, [pathname, router]);
+
+  // Only block rendering for gated /app routes (avoid blanking public pages)
+  const shouldGate = pathname.startsWith("/app") && !isAppExemptPath(pathname);
+
+  if (!shouldGate) return <>{children}</>;
+
+  if (state.kind === "loading") {
+    return (
+      <div className="min-h-dvh bg-[#0a1a2f] text-[#eaeaea] flex items-center justify-center px-6">
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-5 text-sm text-white/80">
+          Loading…
+        </div>
+      </div>
+    );
+  }
+
+  // If unauthed or not completed, router redirects. Render nothing to avoid flicker.
+  if (state.kind === "unauthed") return null;
+  if (state.kind === "authed" && !state.onboardingCompleted) return null;
 
   return <>{children}</>;
 }

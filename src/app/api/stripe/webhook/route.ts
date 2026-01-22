@@ -36,35 +36,61 @@ export async function POST(req: Request) {
     ) {
       const obj: any = event.data.object;
 
-      // Try to pull uid from metadata (preferred)
-      const uid: string | undefined =
+      const db = adminDb();
+
+      // Resolve subscription id (where available)
+      const subscriptionId: string | undefined =
+        obj?.subscription ||
+        (obj?.id && (event.type.startsWith("customer.subscription.") ? obj.id : undefined));
+
+      // Resolve uid + plan from metadata. Preferred source is subscription metadata.
+      let uid: string | undefined =
         obj?.metadata?.uid ||
         obj?.subscription_details?.metadata?.uid ||
         obj?.subscription?.metadata?.uid;
 
-      const plan: string | undefined =
+      let plan: string | undefined =
         obj?.metadata?.plan ||
         obj?.subscription_details?.metadata?.plan ||
         obj?.subscription?.metadata?.plan;
 
+      // If this is an invoice, uid/plan are usually stored on the subscription metadata.
+      // Fetch the subscription once if needed.
+      if ((!uid || !plan) && subscriptionId) {
+        try {
+          const sub = await stripe.subscriptions.retrieve(subscriptionId);
+          uid = uid || (sub.metadata?.uid as string | undefined);
+          plan = plan || (sub.metadata?.plan as string | undefined);
+        } catch {
+          // ignore subscription lookup failures; we'll still proceed if uid is present
+        }
+      }
+
       if (uid) {
-        const db = adminDb();
+        const tier =
+          String(plan || "")
+            .trim()
+            .toUpperCase() === "ANNUAL"
+            ? "pro_web_annual"
+            : "pro_web_monthly";
 
-        // Standard subscription doc path you already use
-        const ref = db.doc(`users/${uid}/subscription/current`);
+        const lastTxn =
+          (typeof obj?.id === "string" && obj.id) ||
+          (typeof obj?.payment_intent === "string" && obj.payment_intent) ||
+          (typeof obj?.latest_invoice === "string" && obj.latest_invoice) ||
+          (typeof obj?.invoice === "string" && obj.invoice) ||
+          event.id;
 
-        await ref.set(
+        // Canonical user doc schema: write entitlement fields at users/{uid}
+        const userRef = db.doc(`users/${uid}`);
+
+        await userRef.set(
           {
             isPro: true,
-            tier: "pro",
-            billing: plan ? `stripe_web_${String(plan).toLowerCase()}` : "stripe_web",
+            subscriptionTier: tier,
+            proUpdatedAt: new Date(),
+            lastTransactionID: String(lastTxn),
             updatedAt: new Date(),
-            // Optional useful fields:
-            stripe: {
-              event: event.type,
-              customerId: obj?.customer ?? null,
-              subscriptionId: obj?.subscription ?? obj?.id ?? null,
-            },
           },
           { merge: true },
         );

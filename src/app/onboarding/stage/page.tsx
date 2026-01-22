@@ -4,13 +4,21 @@ import { useRouter } from "next/navigation";
 import { OnboardingShell, OptionButton } from "@/components/onboarding/OnboardingShell";
 import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import type { SqeStage } from "@/lib/onboarding/store";
+import { writeOnboarding } from "@/lib/onboarding/firestore";
 
 export default function StagePage() {
   const router = useRouter();
   const { setAnswers } = useOnboarding();
 
-  function pick(stage: SqeStage) {
+  async function pick(stage: SqeStage) {
     setAnswers({ stage });
+
+    try {
+      await writeOnboarding({ stage });
+    } catch (e) {
+      console.error("writeOnboarding(stage) failed", e);
+    }
+
     router.push("/onboarding/exam-window");
   }
 

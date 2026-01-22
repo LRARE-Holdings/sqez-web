@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+
+import { writeOnboarding } from "@/lib/onboarding/firestore";
 import { OnboardingShell, OptionButton } from "@/components/onboarding/OnboardingShell";
 import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import type { ExamWindow } from "@/lib/onboarding/store";
@@ -9,8 +11,17 @@ export default function ExamWindowPage() {
   const router = useRouter();
   const { setAnswers } = useOnboarding();
 
-  function pick(examWindow: ExamWindow) {
+  async function pick(examWindow: ExamWindow) {
     setAnswers({ examWindow });
+
+    try {
+      // Persist exam window choice to Firestore
+      // Stored as a simple enum for now; can later be expanded to dates/arrays
+      await writeOnboarding({ examWindow });
+    } catch (e) {
+      console.error("writeOnboarding(examWindow) failed", e);
+    }
+
     router.push("/onboarding/time");
   }
 

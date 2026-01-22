@@ -4,13 +4,21 @@ import { useRouter } from "next/navigation";
 import { OnboardingShell, OptionButton } from "@/components/onboarding/OnboardingShell";
 import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import type { Funding } from "@/lib/onboarding/store";
+import { writeOnboarding } from "@/lib/onboarding/firestore";
 
 export default function FundingPage() {
   const router = useRouter();
   const { setAnswers } = useOnboarding();
 
-  function pick(funding: Funding) {
+  async function pick(funding: Funding) {
     setAnswers({ funding });
+
+    try {
+      await writeOnboarding({ funding });
+    } catch (e) {
+      console.error("writeOnboarding(funding) failed", e);
+    }
+
     router.push("/onboarding/background");
   }
 
