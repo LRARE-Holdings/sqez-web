@@ -201,7 +201,10 @@ export default function HomePage() {
             <Link href="/auth" className="btn btn-ghost px-3 py-2">
               Sign in
             </Link>
-            <Link href="/app" className="btn btn-primary hidden px-3 py-2 sm:inline-flex">
+            <Link
+              href="/signup?next=%2Fonboarding"
+              className="btn btn-primary hidden px-3 py-2 sm:inline-flex"
+            >
               Get Started
             </Link>
           </div>
@@ -231,7 +234,7 @@ export default function HomePage() {
             </p>
 
             <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-              <Link href="/app" className="btn btn-primary w-full sm:w-auto">
+              <Link href="/signup?next=%2Fonboarding" className="btn btn-primary w-full sm:w-auto">
                 Get started today!
               </Link>
               <Link href="#how-it-works" className="btn btn-ghost w-full sm:w-auto">
@@ -352,7 +355,7 @@ export default function HomePage() {
 
                   <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                     <Link
-                      href="/auth"
+                      href="/signup?next=%2Fonboarding"
                       className="btn btn-primary w-full sm:w-auto"
                       aria-label="Choose annual plan"
                     >
@@ -402,7 +405,7 @@ export default function HomePage() {
 
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                   <Link
-                    href="/auth"
+                    href="/signup?next=%2Fonboarding"
                     className="btn btn-outline w-full sm:w-auto"
                     aria-label="Choose monthly plan"
                   >
@@ -494,8 +497,8 @@ export default function HomePage() {
               </p>
 
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <Link href="/app" className="btn btn-primary w-full sm:w-auto">
-                  Start today’s session
+                <Link href="/signup?next=%2Fonboarding" className="btn btn-primary w-full sm:w-auto">
+                  Get started
                 </Link>
                 <Link href="/auth" className="btn btn-ghost w-full sm:w-auto">
                   Sign in

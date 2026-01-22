@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { OnboardingShell } from "@/components/onboarding/OnboardingShell";
 import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import { recommendPlan } from "@/lib/onboarding/store";
+import { auth } from "@/lib/firebase/client";
 
 const WEB_MONTHLY = "£14.99 / month";
 const WEB_ANNUAL = "£79.99 / year";
@@ -17,6 +18,7 @@ function PlanCard({
   highlight,
   subtitle,
   cta,
+  disabled,
   onClick,
 }: {
   title: string;
@@ -24,6 +26,7 @@ function PlanCard({
   subtitle: string;
   highlight?: boolean;
   cta: string;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -39,8 +42,13 @@ function PlanCard({
       <div className="mt-2 text-2xl font-semibold text-white">{price}</div>
       <div className="mt-2 text-sm text-white/70">{subtitle}</div>
 
-      <button type="button" className="btn btn-primary mt-5 w-full" onClick={onClick}>
-        {cta}
+      <button
+        type="button"
+        className="btn btn-primary mt-5 w-full"
+        onClick={onClick}
+        disabled={disabled}
+      >
+        {disabled ? "Redirecting…" : cta}
       </button>
     </div>
   );
@@ -49,6 +57,8 @@ function PlanCard({
 export default function PlanPage() {
   const router = useRouter();
   const { answers } = useOnboarding();
+
+  const [loadingPlan, setLoadingPlan] = useState<null | "MONTHLY" | "ANNUAL">(null);
 
   const rec = useMemo(() => recommendPlan(answers.examWindow), [answers.examWindow]);
 
@@ -60,14 +70,44 @@ export default function PlanPage() {
     }
   }
 
-  // In the real build, these buttons should call your Stripe checkout session endpoint
-  // and pass plan identifiers.
-  function startCheckout(plan: "MONTHLY" | "ANNUAL") {
-    markOnboardingComplete();
-    // TODO: replace with Stripe Checkout creation
-    // router.push(`/pay?plan=${plan}`);
-    router.push("/app"); // placeholder: don’t block product access during build
-    void plan;
+  async function startCheckout(plan: "MONTHLY" | "ANNUAL") {
+    if (loadingPlan) return;
+
+    const user = auth.currentUser;
+    if (!user) {
+      router.push("/auth?next=%2Fonboarding%2Fplan");
+      return;
+    }
+
+    setLoadingPlan(plan);
+
+    try {
+      const token = await user.getIdToken();
+
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ plan }),
+      });
+
+      const data = (await res.json()) as { url?: string; error?: string };
+
+      if (data.url) {
+        // Mark onboarding complete as they are committing to a plan.
+        markOnboardingComplete();
+        window.location.assign(data.url);
+        return;
+      }
+
+      console.error(data.error || "Stripe checkout failed");
+      setLoadingPlan(null);
+    } catch (e) {
+      console.error(e);
+      setLoadingPlan(null);
+    }
   }
 
   const headline =
@@ -97,6 +137,7 @@ export default function PlanPage() {
             subtitle="Best value for longer study periods. Uninterrupted access."
             highlight={rec.kind === "ANNUAL" || rec.kind === "COMPARE"}
             cta="Choose annual"
+            disabled={loadingPlan !== null}
             onClick={() => startCheckout("ANNUAL")}
           />
 
@@ -106,6 +147,7 @@ export default function PlanPage() {
             subtitle="Best for short timelines or flexibility. Cancel anytime."
             highlight={rec.kind === "MONTHLY"}
             cta="Choose monthly"
+            disabled={loadingPlan !== null}
             onClick={() => startCheckout("MONTHLY")}
           />
         </div>

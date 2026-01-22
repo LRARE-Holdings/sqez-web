@@ -6,13 +6,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   GoogleAuthProvider,
   OAuthProvider,
-  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signInWithPopup,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 
 function isValidEmail(value: string) {
-  // deliberately simple + practical (avoids false negatives)
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
@@ -38,13 +37,7 @@ function ProviderButton({
       aria-label={label}
     >
       {variant === "google" ? (
-        <svg
-          aria-hidden="true"
-          width="18"
-          height="18"
-          viewBox="0 0 48 48"
-          className="shrink-0"
-        >
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 48 48" className="shrink-0">
           <path
             fill="#EA4335"
             d="M24 9.5c3.54 0 6.74 1.22 9.28 3.22l6.94-6.94C35.98 2.04 30.37 0 24 0 14.62 0 6.51 5.38 2.56 13.22l8.08 6.28C12.44 13.12 17.72 9.5 24 9.5z"
@@ -63,13 +56,7 @@ function ProviderButton({
           />
         </svg>
       ) : (
-        <svg
-          aria-hidden="true"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          className="shrink-0"
-        >
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" className="shrink-0">
           <path
             fill="#eaeaea"
             d="M16.365 1.43c0 1.14-.468 2.273-1.293 3.18-.86.95-2.27 1.69-3.49 1.59-.15-1.16.42-2.34 1.22-3.2.86-.96 2.33-1.67 3.56-1.57zM20.64 17.53c-.69 1.59-1.02 2.31-1.91 3.71-1.24 1.95-2.98 4.38-5.13 4.4-1.91.02-2.4-1.25-4.99-1.24-2.59.01-3.14 1.26-5.05 1.24-2.15-.02-3.79-2.2-5.03-4.15C.03 19.39-.95 15.5.62 12.69c1.12-2 2.91-3.18 4.6-3.18 1.84 0 2.99 1.26 5.03 1.26 1.98 0 3.19-1.26 5.04-1.26 1.5 0 3.09.82 4.21 2.23-3.71 2.03-3.11 7.33.74 8.29z"
@@ -81,7 +68,7 @@ function ProviderButton({
   );
 }
 
-export default function AuthPage() {
+export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -91,7 +78,6 @@ export default function AuthPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next");
-  const signupHref = next ? `/signup?next=${encodeURIComponent(next)}` : "/signup";
 
   const canSubmit = useMemo(() => {
     const okEmail = isValidEmail(email);
@@ -119,23 +105,25 @@ export default function AuthPage() {
       setStatus("error");
       return;
     }
+
     setStatus("authing");
 
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      await createUserWithEmailAndPassword(auth, email.trim(), password);
       setStatus("done");
-      router.push(next ? decodeURIComponent(next) : "/app");
+      router.push(next ? decodeURIComponent(next) : "/onboarding");
     } catch (err: any) {
       const code = String(err?.code ?? "");
       setStatus("error");
-      if (code.includes("auth/invalid-credential") || code.includes("auth/wrong-password")) {
-        setError("Incorrect email or password.");
-      } else if (code.includes("auth/user-not-found")) {
-        setError("No account found for that email.");
-      } else if (code.includes("auth/too-many-requests")) {
-        setError("Too many attempts. Try again later.");
+
+      if (code.includes("auth/email-already-in-use")) {
+        setError("An account already exists for that email. Try signing in instead.");
+      } else if (code.includes("auth/weak-password")) {
+        setError("That password is too weak. Try something longer.");
+      } else if (code.includes("auth/invalid-email")) {
+        setError("That email address doesn’t look valid.");
       } else {
-        setError("Sign-in failed. Please try again.");
+        setError("Account creation failed. Please try again.");
       }
     }
   }
@@ -148,45 +136,34 @@ export default function AuthPage() {
         const p = new GoogleAuthProvider();
         await signInWithPopup(auth, p);
       } else {
-        // Apple on web uses OAuthProvider("apple.com") via popup.
         const p = new OAuthProvider("apple.com");
         await signInWithPopup(auth, p);
       }
 
       setStatus("done");
-      router.push(next ? decodeURIComponent(next) : "/app");
+      router.push(next ? decodeURIComponent(next) : "/onboarding");
     } catch (err: any) {
       const code = String(err?.code ?? "");
       setStatus("error");
 
-      // Common cases: blocked popup, cancelled flow, provider not enabled
-      if (code.includes("auth/popup-closed-by-user")) {
-        setError("Sign-in cancelled.");
-      } else if (code.includes("auth/popup-blocked")) {
-        setError("Popup blocked. Allow popups then try again.");
-      } else if (code.includes("auth/operation-not-allowed")) {
-        setError("This sign-in method isn’t enabled in Firebase yet.");
-      } else {
+      if (code.includes("auth/popup-closed-by-user")) setError("Sign-up cancelled.");
+      else if (code.includes("auth/popup-blocked")) setError("Popup blocked. Allow popups then try again.");
+      else if (code.includes("auth/operation-not-allowed"))
+        setError("This sign-up method isn’t enabled in Firebase yet.");
+      else
         setError(
           provider === "google"
-            ? "Google sign-in failed. Please try again."
-            : "Apple sign-in failed. Please try again.",
+            ? "Google sign-up failed. Please try again."
+            : "Apple sign-up failed. Please try again.",
         );
-      }
     }
   }
 
   return (
     <main className="relative min-h-dvh">
       {/* Background */}
-      <div
-        className="pointer-events-none absolute inset-0 -z-10"
-        aria-hidden="true"
-      >
-        <div
-          className="absolute inset-0"
-          style={{ backgroundColor: "#0a1a2f" }}
-        />
+      <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
+        <div className="absolute inset-0" style={{ backgroundColor: "#0a1a2f" }} />
         <div className="absolute -top-24 left-1/2 h-64 w-[52rem] -translate-x-1/2 rounded-full bg-white/5 blur-3xl" />
         <div className="absolute top-56 left-1/2 h-64 w-[52rem] -translate-x-1/2 rounded-full bg-white/4 blur-3xl" />
       </div>
@@ -194,24 +171,12 @@ export default function AuthPage() {
       {/* Top bar */}
       <header className="sticky top-0 z-20 border-b border-white/10 bg-[#0a1a2f]/75 backdrop-blur">
         <div className="container-sqez flex items-center justify-between px-4 py-3">
-          <Link
-            href="/"
-            className="flex items-center gap-3"
-            aria-label="SQEz home"
-          >
-            <img
-              src="/sqez-logo.svg"
-              alt="SQEz"
-              className="h-5 w-auto"
-            />
+          <Link href="/" className="flex items-center gap-3" aria-label="SQEz home">
+            <img src="/sqez-logo.svg" alt="SQEz" className="h-5 w-auto" />
             <span className="sr-only">SQEz</span>
           </Link>
 
-          <Link
-            className="btn btn-ghost px-3 py-2"
-            href="/"
-            aria-label="Back to home"
-          >
+          <Link className="btn btn-ghost px-3 py-2" href="/" aria-label="Back to home">
             Back
           </Link>
         </div>
@@ -220,44 +185,24 @@ export default function AuthPage() {
       <div className="container-sqez grid gap-10 px-4 pb-14 pt-10 lg:grid-cols-2">
         {/* Left: copy */}
         <section className="max-w-xl">
-          <div className="chip">Sign in</div>
+          <div className="chip">Create account</div>
 
           <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">
-            Keep your sessions consistent.
+            Start building momentum.
           </h1>
 
           <p className="mt-4 text-sm leading-relaxed text-white/80 sm:text-base">
-            Use email + password, or sign in with Apple or Google. No other
-            sign-in methods are supported.
+            Create your SQEz account. Then we’ll personalise your onboarding and get you into your first session.
           </p>
-          <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
-            <div className="text-sm font-semibold text-white">New to SQEz?</div>
-            <div className="mt-1 text-sm text-white/80">
-              Create an account to start onboarding and personalise your study plan.
-            </div>
-            <div className="mt-4">
-              <Link href={signupHref} className="btn btn-primary w-full sm:w-auto">
-                Create account
-              </Link>
-            </div>
-          </div>
 
           <div className="mt-6 grid gap-3">
             <div className="card-soft">
-              <div className="text-sm font-semibold">Why sign in?</div>
+              <div className="text-sm font-semibold">Why an account?</div>
               <ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-white/80">
-                <li>Sync your streak, accuracy, and confidence across devices</li>
-                <li>Keep your weak areas and spaced repetition intact</li>
-                <li>Pick up instantly on web or iOS</li>
+                <li>Keep your streak, accuracy, and confidence</li>
+                <li>Sync between web and iOS</li>
+                <li>Protect your question history and spaced repetition</li>
               </ul>
-            </div>
-
-            <div className="card-soft">
-              <div className="text-sm font-semibold">Privacy-first by design</div>
-              <p className="mt-2 text-sm leading-relaxed text-white/80">
-                We minimise what we collect. Your performance data is for your
-                learning — not marketing noise.
-              </p>
             </div>
           </div>
         </section>
@@ -267,19 +212,15 @@ export default function AuthPage() {
           <div className="card">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold tracking-tight">Sign in</h2>
-                <p className="mt-2 text-sm text-white/75">
-                  Choose a method below.
-                </p>
+                <h2 className="text-lg font-semibold tracking-tight">Sign up</h2>
+                <p className="mt-2 text-sm text-white/75">Choose a method below.</p>
               </div>
-
               <div className="chip">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 Secure
               </div>
             </div>
 
-            {/* Provider buttons */}
             <div className="mt-5 grid gap-2">
               <ProviderButton
                 variant="google"
@@ -297,14 +238,10 @@ export default function AuthPage() {
 
             <div className="my-6 divider" />
 
-            {/* Email/password */}
             <form onSubmit={onEmailPasswordSubmit}>
               <div className="grid gap-3">
                 <div>
-                  <label
-                    className="block text-xs font-medium text-white/75"
-                    htmlFor="email"
-                  >
+                  <label className="block text-xs font-medium text-white/75" htmlFor="email">
                     Email address
                   </label>
                   <input
@@ -323,10 +260,7 @@ export default function AuthPage() {
                 </div>
 
                 <div>
-                  <label
-                    className="block text-xs font-medium text-white/75"
-                    htmlFor="password"
-                  >
+                  <label className="block text-xs font-medium text-white/75" htmlFor="password">
                     Password
                   </label>
                   <div className="mt-2 flex items-stretch gap-2">
@@ -334,8 +268,8 @@ export default function AuthPage() {
                       id="password"
                       className="input"
                       type={showPw ? "text" : "password"}
-                      autoComplete="current-password"
-                      placeholder="Your password"
+                      autoComplete="new-password"
+                      placeholder="Create a password"
                       value={password}
                       onChange={(e) => {
                         setPassword(e.target.value);
@@ -352,9 +286,7 @@ export default function AuthPage() {
                       {showPw ? "Hide" : "Show"}
                     </button>
                   </div>
-                  <div className="mt-2 text-[11px] text-white/60">
-                    Minimum 8 characters.
-                  </div>
+                  <div className="mt-2 text-[11px] text-white/60">Minimum 8 characters.</div>
                 </div>
 
                 {error ? (
@@ -363,66 +295,22 @@ export default function AuthPage() {
                   </div>
                 ) : null}
 
-                {status === "done" ? (
-                  <div className="rounded-xl border border-white/15 bg-white/5 px-4 py-3">
-                    <div className="text-sm font-semibold">Signed in</div>
-                    <div className="mt-1 text-sm text-white/80">
-                      You're signed in. Redirecting you to the dashboard…
-                    </div>
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                      <Link
-                        className="btn btn-primary w-full sm:w-auto"
-                        href={next ? decodeURIComponent(next) : "/app"}
-                      >
-                        Continue
-                      </Link>
-                      <button
-                        type="button"
-                        className="btn btn-outline w-full sm:w-auto"
-                        onClick={() => setStatus("idle")}
-                      >
-                        Sign out (mock)
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="submit"
-                    className="btn btn-primary w-full"
-                    disabled={!canSubmit}
-                  >
-                    {status === "authing" ? "Signing in…" : "Sign in with email"}
-                  </button>
-                )}
+                <button type="submit" className="btn btn-primary w-full" disabled={!canSubmit}>
+                  {status === "authing" ? "Creating account…" : "Create account"}
+                </button>
 
                 <div className="text-xs leading-relaxed text-white/70">
-                  By continuing, you agree to our{" "}
-                  <Link href="/legal/terms">Terms</Link> and{" "}
+                  By continuing, you agree to our <Link href="/legal/terms">Terms</Link> and{" "}
                   <Link href="/legal/privacy">Privacy Policy</Link>.
                 </div>
 
-                <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-xs text-white/70">
-                    Forgot your password?
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-ghost px-3 py-2"
-                    onClick={() => {
-                      setError(
-                        "Password reset isn’t wired yet. Next: Firebase reset flow.",
-                      );
-                      setStatus("error");
-                    }}
-                    disabled={status === "authing"}
+                <div className="pt-2 text-xs text-white/70">
+                  Already have an account?{" "}
+                  <Link
+                    href={next ? `/auth?next=${encodeURIComponent(next)}` : "/auth"}
+                    className="underline"
                   >
-                    Reset password
-                  </button>
-                </div>
-                <div className="pt-4 text-xs text-white/70">
-                  Don&apos;t have an account?{" "}
-                  <Link href={signupHref} className="underline">
-                    Create one
+                    Sign in
                   </Link>
                 </div>
               </div>
