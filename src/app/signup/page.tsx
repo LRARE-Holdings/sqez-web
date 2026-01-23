@@ -19,6 +19,30 @@ function isValidEmail(value: string) {
 
 type Status = "idle" | "authing" | "done" | "error";
 
+function safeDecode(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+async function userHasName(uid: string) {
+  try {
+    const snap = await getDoc(doc(db, "users", uid));
+    if (!snap.exists()) return false;
+    const data = snap.data() as { firstName?: string; lastName?: string };
+    return Boolean(
+      typeof data.firstName === "string" &&
+        data.firstName.trim() &&
+        typeof data.lastName === "string" &&
+        data.lastName.trim(),
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function ensureUserDoc(params: { uid: string; email: string | null }) {
   const { uid, email } = params;
 
@@ -170,8 +194,13 @@ export default function SignupPage() {
         }
       }
 
-      setStatus("done");
-      router.push(next ? decodeURIComponent(next) : "/onboarding");
+      const nextDest = next ? safeDecode(next) : "/onboarding";
+
+      // Phase 2: collect names before email verification / onboarding.
+      // Verify-email page will auto-send (with throttle) if still unverified.
+      const verifyNext = `/verify-email?next=${encodeURIComponent(nextDest)}`;
+      router.push(`/name?next=${encodeURIComponent(verifyNext)}`);
+      return;
     } catch (err: any) {
       const code = String(err?.code ?? "");
       setStatus("error");
@@ -210,7 +239,16 @@ export default function SignupPage() {
       }
 
       setStatus("done");
-      router.push(next ? decodeURIComponent(next) : "/onboarding");
+
+      const nextDest = next ? safeDecode(next) : "/onboarding";
+
+      // Ask for names once if missing (Google/Apple may or may not provide them).
+      if (user && !(await userHasName(user.uid))) {
+        router.push(`/name?next=${encodeURIComponent(nextDest)}`);
+        return;
+      }
+
+      router.push(nextDest);
     } catch (err: any) {
       const code = String(err?.code ?? "");
       setStatus("error");

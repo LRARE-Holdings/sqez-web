@@ -1,5 +1,27 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  BookOpen,
+  Layers,
+  Zap,
+  Settings2,
+  ChevronLeft,
+  Check,
+  FileText,
+  Library,
+  Star,
+} from "lucide-react";
+
+import { AppCard, AppCardSoft } from "@/components/ui/AppCard";
 import { allTopics } from "@/lib/topicCatalog";
+import { auth, db } from "@/lib/firebase/client";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+
+type Difficulty = "ALL" | "Easy" | "Medium" | "Hard";
+type Mode = "quickfire" | "revise";
 
 function safeDecode(v: string): string {
   try {
@@ -23,7 +45,6 @@ function resolveTopic(param: string) {
   const compactRawLower = compact(rawLower);
   const compactDecodedLower = compact(decodedLower);
 
-  // 1) Match by canonical key (case-insensitive), including compacted forms
   const byKey =
     allTopics.find((t) => t.key.toLowerCase() === rawLower) ??
     allTopics.find((t) => t.key.toLowerCase() === decodedLower) ??
@@ -32,21 +53,18 @@ function resolveTopic(param: string) {
 
   if (byKey) return byKey;
 
-  // 2) Match by exact title (case-insensitive)
   const byTitle =
     allTopics.find((t) => t.title.toLowerCase() === decodedLower) ??
     allTopics.find((t) => t.title.toLowerCase() === rawLower);
 
   if (byTitle) return byTitle;
 
-  // 3) Match by compacted title vs compacted param
   const byCompactedTitle = allTopics.find(
     (t) => compact(t.title.toLowerCase()) === compactDecodedLower,
   );
 
   if (byCompactedTitle) return byCompactedTitle;
 
-  // 4) Loose fallback
   return allTopics.find((t) => {
     const tKey = t.key.toLowerCase();
     const tTitle = t.title.toLowerCase();
@@ -58,136 +76,483 @@ function resolveTopic(param: string) {
   });
 }
 
-export default async function TopicDetailPage({
+/** Basic segmented control */
+function Segmented<T extends string>({
+  value,
+  onChange,
+  items,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  items: { key: T; label: string }[];
+}) {
+  return (
+    <div className="inline-flex rounded-2xl border border-white/10 bg-white/5 p-1">
+      {items.map((it) => {
+        const active = it.key === value;
+        return (
+          <button
+            key={it.key}
+            type="button"
+            onClick={() => onChange(it.key)}
+            className={[
+              "rounded-xl px-3 py-2 text-xs transition",
+              active
+                ? "bg-white/10 text-white"
+                : "text-white/70 hover:bg-white/7 hover:text-white",
+            ].join(" ")}
+          >
+            {it.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TogglePill({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition",
+        active
+          ? "border-white/20 bg-white/10 text-white"
+          : "border-white/10 bg-white/5 text-white/70 hover:bg-white/7 hover:text-white",
+      ].join(" ")}
+    >
+      {active ? <Check className="h-3.5 w-3.5 text-white/80" /> : null}
+      {label}
+    </button>
+  );
+}
+
+function clampInt(n: number, min: number, max: number) {
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, Math.floor(n)));
+}
+
+export default function TopicDetailPage({
   params,
 }: {
   params: Promise<{ key: string }>;
 }) {
-  const { key } = await params;
-  const rawKey = (key ?? "").trim();
+  const router = useRouter();
+  const sp = useSearchParams();
 
-  const topic = rawKey ? resolveTopic(rawKey) : undefined;
+  const [rawKey, setRawKey] = useState("");
+  const [mode, setMode] = useState<Mode>("quickfire");
+  const [count, setCount] = useState<number>(10);
+  const [difficulty, setDifficulty] = useState<Difficulty>("ALL");
+  const [selectedSubtopics, setSelectedSubtopics] = useState<string[]>([]);
+  const [notes, setNotes] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notesStatus, setNotesStatus] = useState<"idle" | "saved" | "error">(
+    "idle",
+  );
+
+  // Resolve params.key safely (Next 16 dynamic params are async)
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const p = await params;
+      if (cancelled) return;
+      setRawKey((p?.key ?? "").trim());
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [params]);
+
+  const topic = useMemo(() => {
+    const k = rawKey.trim();
+    return k ? resolveTopic(k) : undefined;
+  }, [rawKey]);
+
+  // Prefer querystring overrides if present (nice for back/forward)
+  useEffect(() => {
+    const m = sp.get("mode");
+    const c = sp.get("count");
+    const d = sp.get("difficulty");
+    const subs = sp.get("subtopics");
+
+    if (m === "quickfire" || m === "revise") setMode(m);
+
+    if (c) setCount(clampInt(Number(c), 5, 40));
+
+    if (d === "ALL" || d === "Easy" || d === "Medium" || d === "Hard")
+      setDifficulty(d);
+
+    if (subs) {
+      const parsed = subs
+        .split(",")
+        .map((s) => safeDecode(s).trim())
+        .filter(Boolean);
+      setSelectedSubtopics(parsed);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const subtopics = useMemo(() => {
+    // If your TopicCatalog already contains subtopics, wire it here.
+    // For now we infer from the topic key structure is unavailable.
+    // We'll populate this later from Firestore (distinct subTopic values for this topic).
+    return [] as string[];
+  }, []);
+
+  // Load notes from Firestore: users/{uid}/notes/{topicKey}
+  useEffect(() => {
+    setNotesStatus("idle");
+    if (!topic) return;
+
+    const user = auth.currentUser;
+    if (!user) {
+      setNotes("");
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const ref = doc(db, "users", user.uid, "notes", topic.key);
+        const snap = await getDoc(ref);
+        if (cancelled) return;
+
+        const data = snap.exists() ? snap.data() : null;
+        setNotes((data?.notes as string) ?? "");
+      } catch {
+        if (!cancelled) setNotes("");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [topic]);
+
+  async function saveNotes() {
+    if (!topic) return;
+    const user = auth.currentUser;
+    if (!user) {
+      router.push(`/auth?next=${encodeURIComponent(`/app/learn/${topic.key}`)}`);
+      return;
+    }
+
+    setSavingNotes(true);
+    setNotesStatus("idle");
+
+    try {
+      const ref = doc(db, "users", user.uid, "notes", topic.key);
+      await setDoc(
+        ref,
+        {
+          topicKey: topic.key,
+          topicTitle: topic.title,
+          notes,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      setNotesStatus("saved");
+    } catch {
+      setNotesStatus("error");
+    } finally {
+      setSavingNotes(false);
+      window.setTimeout(() => setNotesStatus("idle"), 1800);
+    }
+  }
+
+  function toggleSubtopic(s: string) {
+    setSelectedSubtopics((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
+    );
+  }
+
+  function start() {
+    if (!topic) return;
+
+    const base =
+      mode === "revise" ? "/app/revise" : "/app/session";
+
+    const q = new URLSearchParams();
+    q.set("topic", topic.key);
+    q.set("count", String(count));
+    if (difficulty !== "ALL") q.set("difficulty", difficulty);
+    if (selectedSubtopics.length > 0)
+      q.set(
+        "subtopics",
+        selectedSubtopics.map((s) => encodeURIComponent(s)).join(","),
+      );
+
+    router.push(`${base}?${q.toString()}`);
+  }
 
   if (!topic) {
     return (
-      <div className="card">
-        <div className="text-sm font-semibold text-white">Topic not found</div>
-        <div className="mt-1 text-xs text-white/50">debug route v3</div>
-        <div className="mt-2 text-sm text-white/70">
-          Unknown topic key:{" "}
-          <span className="text-white/80">{rawKey || "(empty)"}</span>
-        </div>
-        <div className="mt-2 text-sm text-white/70">
-          Expected format: canonical key like{" "}
-          <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-xs text-white/80">
-            DisputeResolution
-          </code>
-        </div>
-        <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-          <div className="text-xs font-semibold text-white/80">Debug</div>
-          <div className="mt-2 text-xs text-white/60">
-            params.key (raw):{" "}
-            <span className="text-white/80">
-              {rawKey || "(empty)"}{" "}
-              <span className="text-white/50">({JSON.stringify(rawKey)})</span>
-            </span>
+      <div className="grid gap-6">
+        <AppCard title="Topic not found" subtitle="Return to Learn and try again.">
+          <div className="mt-2 text-sm text-white/70">
+            Unknown topic key:{" "}
+            <span className="text-white/90">{rawKey || "(empty)"}</span>
           </div>
-          <div className="mt-2 text-xs text-white/60">
-            char codes:{" "}
-            <span className="text-white/80">
-              {rawKey
-                ? rawKey.split("").map((c) => c.charCodeAt(0)).join(", ")
-                : "(empty)"}
-            </span>
+          <div className="mt-4">
+            <Link href="/app/learn" className="btn btn-primary !no-underline">
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Back to Learn
+            </Link>
           </div>
-          <div className="mt-2 text-xs text-white/60">
-            decoded:{" "}
-            <span className="text-white/80">
-              {safeDecode(rawKey)}{" "}
-              <span className="text-white/50">
-                ({JSON.stringify(safeDecode(rawKey))})
-              </span>
-            </span>
-          </div>
-          <div className="mt-2 text-xs text-white/60">
-            compact(decoded).toLowerCase():{" "}
-            <span className="text-white/80">
-              {compact(safeDecode(rawKey).toLowerCase())}
-            </span>
-          </div>
-          <div className="mt-2 text-xs text-white/60">
-            resolveTopic(rawKey) returns:{" "}
-            <span className="text-white/80">
-              {String(Boolean(rawKey && resolveTopic(rawKey)))}
-            </span>
-          </div>
-          <div className="mt-2 text-xs text-white/60">
-            allTopics length:{" "}
-            <span className="text-white/80">{allTopics.length}</span>
-          </div>
-          <div className="mt-2 text-xs text-white/60">
-            Looking for key:{" "}
-            <span className="text-white/80">DisputeResolution</span>
-          </div>
-          <div className="mt-2 text-xs text-white/60">
-            Has DisputeResolution:{" "}
-            <span className="text-white/80">
-              {String(
-                allTopics.some(
-                  (t) => (t.key ?? "").toLowerCase() === "disputeresolution",
-                ),
-              )}
-            </span>
-          </div>
-          <div className="mt-3 text-xs text-white/60">First topics:</div>
-          <ul className="mt-2 grid gap-1 text-xs text-white/70">
-            {allTopics.slice(0, 25).map((t) => (
-              <li key={t.key}>
-                <span className="text-white/80">{t.key}</span>{" "}
-                <span className="text-white/50">—</span>{" "}
-                <span>{t.title}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="mt-5">
-          <Link href="/app/learn" className="btn btn-primary w-full sm:w-auto">
-            Back to Learn
-          </Link>
-        </div>
+        </AppCard>
       </div>
     );
   }
 
   return (
-    <div className="card">
-      <div className="text-xs text-white/50">route v3 • key: {key}</div>
-      <div className="text-xs text-white/60">{topic.module}</div>
-      <div className="mt-2 text-xl font-semibold tracking-tight text-white">
-        {topic.title}
-      </div>
-      <div className="mt-3 text-sm leading-relaxed text-white/80">
-        {topic.overview}
+    <div className="grid gap-6">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="text-xs text-white/60">{topic.module}</div>
+          <div className="mt-1 text-2xl font-semibold tracking-tight text-white">
+            {topic.title}
+          </div>
+          <div className="mt-2 max-w-3xl text-sm leading-relaxed text-white/70">
+            {topic.overview}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 gap-2">
+          <Link href="/app/learn" className="btn btn-ghost !no-underline">
+            <ChevronLeft className="mr-2 h-4 w-4" />
+            Back
+          </Link>
+        </div>
       </div>
 
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-        <Link
-          href={`/app/session?topic=${encodeURIComponent(topic.key)}`}
-          className="btn btn-primary w-full sm:w-auto"
-        >
-          Start Quickfire
-        </Link>
-        <Link
-          href={`/app/revise?topic=${encodeURIComponent(topic.key)}`}
-          className="btn btn-outline w-full sm:w-auto"
-        >
-          Revise
-        </Link>
-        <Link href="/app/learn" className="btn btn-ghost w-full sm:w-auto">
-          Back
-        </Link>
-      </div>
+      {/* Study builder */}
+      <AppCard
+        title="Study this topic"
+        subtitle="Choose how you want to practise. You’re always in control."
+      >
+        <div className="grid gap-6 lg:grid-cols-12">
+          {/* Left: mode + options */}
+          <div className="lg:col-span-7">
+            <div className="grid gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <Settings2 className="h-4 w-4 text-white/70" />
+                  Session settings
+                </div>
 
+                <Segmented<Mode>
+                  value={mode}
+                  onChange={setMode}
+                  items={[
+                    { key: "quickfire", label: "Quickfire" },
+                    { key: "revise", label: "Revise" },
+                  ]}
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <AppCardSoft className="px-5 py-4">
+                  <div className="text-xs text-white/60">Questions</div>
+                  <div className="mt-2 flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={5}
+                      max={40}
+                      value={count}
+                      onChange={(e) => setCount(clampInt(Number(e.target.value), 5, 40))}
+                      className="w-full"
+                    />
+                    <div className="w-10 text-right text-sm font-semibold text-white">
+                      {count}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-xs text-white/60">
+                    Keep it short and repeat often.
+                  </div>
+                </AppCardSoft>
+
+                <AppCardSoft className="px-5 py-4">
+                  <div className="text-xs text-white/60">Difficulty</div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <TogglePill
+                      active={difficulty === "ALL"}
+                      label="All"
+                      onClick={() => setDifficulty("ALL")}
+                    />
+                    <TogglePill
+                      active={difficulty === "Easy"}
+                      label="Easy"
+                      onClick={() => setDifficulty("Easy")}
+                    />
+                    <TogglePill
+                      active={difficulty === "Medium"}
+                      label="Medium"
+                      onClick={() => setDifficulty("Medium")}
+                    />
+                    <TogglePill
+                      active={difficulty === "Hard"}
+                      label="Hard"
+                      onClick={() => setDifficulty("Hard")}
+                    />
+                  </div>
+                </AppCardSoft>
+              </div>
+
+              {/* Subtopics (placeholder until we wire from Firestore) */}
+              <AppCardSoft className="px-5 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs text-white/60">Subtopics</div>
+                    <div className="mt-1 text-sm text-white/75">
+                      Filter your session to specific areas.
+                    </div>
+                  </div>
+
+                  {selectedSubtopics.length > 0 ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost px-3 py-2 !no-underline"
+                      onClick={() => setSelectedSubtopics([])}
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+
+                {subtopics.length === 0 ? (
+                  <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/65">
+                    Subtopic filtering will appear here once we pull the list from
+                    Firestore (distinct <code className="px-1">subTopic</code> values
+                    for this topic).
+                  </div>
+                ) : (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {subtopics.map((s) => (
+                      <TogglePill
+                        key={s}
+                        active={selectedSubtopics.includes(s)}
+                        label={s}
+                        onClick={() => toggleSubtopic(s)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </AppCardSoft>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  className="btn btn-primary w-full sm:w-auto !no-underline"
+                  onClick={start}
+                >
+                  <Zap className="mr-2 h-4 w-4" />
+                  Start session
+                </button>
+
+                <Link
+                  href={`/app/revise?topic=${encodeURIComponent(topic.key)}`}
+                  className="btn btn-outline w-full sm:w-auto !no-underline"
+                >
+                  <Layers className="mr-2 h-4 w-4" />
+                  Revise
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: resources + key questions */}
+          <div className="lg:col-span-5">
+            <div className="grid gap-3">
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <Library className="h-4 w-4 text-white/70" />
+                  Resources
+                </div>
+                <div className="mt-2 text-sm text-white/70">
+                  We’ll surface statutes, key cases, and links here per topic.
+                </div>
+                <div className="mt-3 text-xs text-white/55">
+                  Next step: wire this to your StatuteLibrary / CaseLibrary.
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <Star className="h-4 w-4 text-white/70" />
+                  Key questions
+                </div>
+                <div className="mt-2 text-sm text-white/70">
+                  A curated list of “must-know” questions will live here.
+                </div>
+                <div className="mt-3 text-xs text-white/55">
+                  Next step: add a Firestore collection for key questions by topic.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </AppCard>
+
+      {/* Notes */}
+      <AppCard
+        title="Notes"
+        subtitle="Private notes for this topic. Saved to your account."
+      >
+        <div className="grid gap-3">
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-white/60">
+              <FileText className="h-4 w-4 text-white/45" />
+              <span>Notes for {topic.title}</span>
+            </div>
+
+            <textarea
+              className="mt-3 w-full resize-y rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/90 outline-none placeholder:text-white/40 focus:border-white/25"
+              rows={8}
+              placeholder="Write anything you want to remember — checklists, definitions, weak points, examples…"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-xs text-white/60">
+                {notesStatus === "saved" ? (
+                  <span className="text-emerald-200/90">Saved</span>
+                ) : notesStatus === "error" ? (
+                  <span className="text-amber-200/90">Couldn’t save</span>
+                ) : (
+                  <span className="text-white/55">Autosave is optional — click save.</span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary w-full sm:w-auto !no-underline"
+                onClick={saveNotes}
+                disabled={savingNotes}
+              >
+                {savingNotes ? "Saving…" : "Save notes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </AppCard>
+
+      <div className="text-xs text-white/55">
+        Tip: Quickfire is best as your default. Use Revise when you want a tighter filter.
+      </div>
     </div>
   );
 }

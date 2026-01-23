@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Suspense } from "react";
-import OnboardingGate from "@/components/onboarding/OnboardingGate";
+import { OnboardingGate } from "@/components/onboarding/OnboardingGate";
 
 export const metadata: Metadata = {
   title: "SQEz — daily SQE revision",

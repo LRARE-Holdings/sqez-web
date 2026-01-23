@@ -9,6 +9,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
 } from "firebase/auth";
+import { needsMfaEnrollment } from "@/lib/auth/mfa";
 import { auth, db } from "@/lib/firebase/client";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
@@ -179,6 +180,17 @@ export default function AuthPage() {
           await ensureUserDoc({ uid: user.uid, email: user.email });
         } catch (e) {
           console.error("ensureUserDoc failed", e);
+        }
+
+        // Enforce MFA for password users (existing accounts too)
+        if (needsMfaEnrollment(user)) {
+          setStatus("done");
+          router.push(
+            `/mfa/enroll?next=${encodeURIComponent(
+              next ? decodeURIComponent(next) : "/app",
+            )}`,
+          );
+          return;
         }
       }
 

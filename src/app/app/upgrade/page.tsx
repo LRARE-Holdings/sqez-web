@@ -4,19 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase/client";
 
 type Status = "checking-auth" | "waiting-entitlement" | "active" | "error";
-
-function markOnboardingComplete() {
-  try {
-    localStorage.setItem("sqez_onboarding_complete", "true");
-  } catch {
-    // ignore
-  }
-}
 
 export default function UpgradePage() {
   const router = useRouter();
@@ -35,20 +27,24 @@ export default function UpgradePage() {
 
       setStatus("waiting-entitlement");
 
-      const ref = doc(db, "users", user.uid, "subscription", "current");
+      // ✅ Single source of truth: users/{uid}.isPro
+      const ref = doc(db, "users", user.uid);
+
       const unsubDoc = onSnapshot(
         ref,
         (snap) => {
           const data = snap.data() as any;
 
           if (data?.isPro === true) {
-            markOnboardingComplete();
-            setStatus("active");
+            // Safety net: ensure onboardingCompleted is true once Pro is active
+            void setDoc(
+              doc(db, "users", user.uid),
+              { onboardingCompleted: true, updatedAt: serverTimestamp() },
+              { merge: true },
+            );
 
-            // Optional: auto-redirect after a short beat
-            setTimeout(() => {
-              router.replace("/app");
-            }, 900);
+            setStatus("active");
+            setTimeout(() => router.replace("/app"), 900);
             return;
           }
 
@@ -77,7 +73,7 @@ export default function UpgradePage() {
           ) : null}
         </div>
 
-        {status === "waiting-entitlement" || status === "checking-auth" ? (
+        {(status === "waiting-entitlement" || status === "checking-auth") && (
           <>
             <h1 className="mt-4 text-2xl font-semibold tracking-tight">
               You&apos;re almost in.
@@ -104,9 +100,9 @@ export default function UpgradePage() {
               </Link>
             </div>
           </>
-        ) : null}
+        )}
 
-        {status === "active" ? (
+        {status === "active" && (
           <>
             <h1 className="mt-4 text-2xl font-semibold tracking-tight">
               Upgrade confirmed ✅
@@ -124,9 +120,9 @@ export default function UpgradePage() {
               </Link>
             </div>
           </>
-        ) : null}
+        )}
 
-        {status === "error" ? (
+        {status === "error" && (
           <>
             <h1 className="mt-4 text-2xl font-semibold tracking-tight">
               We couldn’t confirm yet
@@ -146,7 +142,7 @@ export default function UpgradePage() {
               </Link>
             </div>
           </>
-        ) : null}
+        )}
       </div>
     </div>
   );

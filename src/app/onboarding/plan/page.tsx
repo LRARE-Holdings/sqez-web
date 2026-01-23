@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { auth } from "@/lib/firebase/client";
+import { auth, db } from "@/lib/firebase/client";
+
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { OnboardingShell } from "@/components/onboarding/OnboardingShell";
 import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
@@ -62,6 +64,21 @@ export default function PlanPage() {
   const [loadingPlan, setLoadingPlan] = useState<null | "MONTHLY" | "ANNUAL">(null);
 
   const rec = useMemo(() => recommendPlan(answers.examWindow), [answers.examWindow]);
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // Firestore is the single source of truth for gating.
+    void setDoc(
+      doc(db, "users", user.uid),
+      {
+        onboardingCompleted: true,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }, []);
 
   async function startCheckout(plan: "MONTHLY" | "ANNUAL") {
     if (loadingPlan) return;

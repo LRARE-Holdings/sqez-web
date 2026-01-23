@@ -46,7 +46,6 @@ body {
 /* Links */
 a {
   color: #eaeaea;
-  text-decoration: underline;
   text-underline-offset: 4px;
   text-decoration-color: rgba(234, 234, 234, 0.35);
 }
