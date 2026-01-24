@@ -386,7 +386,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="lg:col-span-5">
-          <AppCard title="Quick links" subtitle="Where most people go next.">
+          <AppCard title="Quick links">
             <div className="grid gap-3">
               <Link
                 href="/app/session"

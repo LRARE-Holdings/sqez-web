@@ -281,11 +281,11 @@ export default function SignupPage() {
             <div className="chip">Create account</div>
 
             <h1 className="mt-6 text-4xl font-semibold tracking-tight text-white">
-              Build momentum with short sessions.
+              Your journey begins here.
             </h1>
 
             <p className="mt-4 text-sm leading-relaxed text-white/80">
-              Create your SQEz account, set your study runway, and start practising. Everything syncs across web and iOS.
+              Create your SQEz account, tell us a bit about you and we'll take it from there.
             </p>
 
             <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
@@ -297,17 +297,6 @@ export default function SignupPage() {
                 <Link href={signinHref} className="btn btn-primary w-full sm:w-auto !no-underline">
                   Sign in
                 </Link>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-3">
-              <div className="card-soft">
-                <div className="text-sm font-semibold">What you’ll get</div>
-                <ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-white/80">
-                  <li>Fast MCQ sessions with clear answer review</li>
-                  <li>Confidence tracking and progress insights</li>
-                  <li>One account across devices</li>
-                </ul>
               </div>
             </div>
           </section>
@@ -408,11 +397,11 @@ export default function SignupPage() {
 
                 <div className="text-xs leading-relaxed text-white/70">
                   By continuing, you agree to our{" "}
-                  <Link href="/legal/terms" className="!no-underline hover:underline">
+                  <Link href="https://lrare.co.uk/terms" className="!no-underline hover:underline">
                     Terms
                   </Link>{" "}
                   and{" "}
-                  <Link href="/legal/privacy" className="!no-underline hover:underline">
+                  <Link href="https://lrare.co.uk/privacy" className="!no-underline hover:underline">
                     Privacy Policy
                   </Link>
                   .
@@ -427,9 +416,6 @@ export default function SignupPage() {
               </form>
             </div>
 
-            <p className="mt-4 text-center text-xs text-white/60">
-              SQEz is a revision companion tool — not a prep-course replacement.
-            </p>
           </section>
         </div>
       </div>

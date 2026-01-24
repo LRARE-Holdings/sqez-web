@@ -11,7 +11,7 @@ import {
   signInWithEmailAndPassword,
   type MultiFactorInfo,
 } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase/client";
 
@@ -34,43 +34,23 @@ function isValidEmail(value: string) {
 async function ensureUserDoc(params: { uid: string; email: string | null }) {
   const { uid, email } = params;
 
+  // IMPORTANT:
+  // Don’t attempt an existence check here.
+  // - If the read is blocked (rules / token propagation), `getDoc` can fail.
+  // - If the existence check is wrong for any reason, creating a “default” doc
+  //   can accidentally reset onboardingCompleted to false.
+  //
+  // Instead, do a minimal merge-only upsert that cannot clobber onboarding.
   const ref = doc(db, "users", uid);
-  const snap = await getDoc(ref);
 
-  const base = {
-    updatedAt: serverTimestamp(),
-    email: email ?? "",
-  };
-
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      ...base,
-      createdAt: serverTimestamp(),
-
-      firstName: "",
-      lastName: "",
-
-      fcmToken: "",
-      fcmTokenUpdatedAt: serverTimestamp(),
-
-      mfaEnrolled: false,
-
-      onboardingCompleted: false,
-      onboarding: {
-        hoursPerWeek: 0,
-        persona: "",
-        targetExamDate: null,
-      },
-
-      isPro: false,
-      subscriptionTier: "free",
-      proUpdatedAt: serverTimestamp(),
-      lastTransactionID: "",
-    });
-    return;
-  }
-
-  await setDoc(ref, base, { merge: true });
+  await setDoc(
+    ref,
+    {
+      updatedAt: serverTimestamp(),
+      email: email ?? "",
+    },
+    { merge: true },
+  );
 }
 
 function phoneHintLabel(hint: MultiFactorInfo | undefined | null) {

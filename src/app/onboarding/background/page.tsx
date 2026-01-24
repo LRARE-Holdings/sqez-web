@@ -7,6 +7,18 @@ import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import type { LegalBackground, Location } from "@/lib/onboarding/store";
 
 import { writeOnboarding } from "@/lib/onboarding/firestore";
+import { UNIVERSITIES_UK } from "@/lib/universities";
+
+function normalizeUni(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+function canonicalUniversity(input: string): string {
+  const needle = normalizeUni(input);
+  if (!needle) return "";
+  const found = UNIVERSITIES_UK.find((u) => normalizeUni(u) === needle);
+  return found ?? "";
+}
 
 export default function BackgroundPage() {
   const router = useRouter();
@@ -30,7 +42,15 @@ export default function BackgroundPage() {
   }, [answers.location, answers.legalBackground]);
 
   const [university, setUniversity] = useState(answers.university ?? "");
-  const canContinue = useMemo(() => Boolean(answers.location && answers.legalBackground), [answers]);
+  const universityCanonical = useMemo(() => canonicalUniversity(university), [university]);
+  const universityValid = useMemo(
+    () => university.trim().length === 0 || universityCanonical.length > 0,
+    [university, universityCanonical]
+  );
+  const canContinue = useMemo(
+    () => Boolean(answers.location && answers.legalBackground) && universityValid,
+    [answers.location, answers.legalBackground, universityValid]
+  );
 
   function pickLocation(location: Location) {
     setAnswers({ location });
@@ -40,7 +60,7 @@ export default function BackgroundPage() {
   }
 
   async function next() {
-    const uni = university.trim() || "";
+    const uni = universityCanonical; // empty string if not selected from list
     setAnswers({ university: uni || undefined });
 
     // Persist university to Firestore (single source of truth)
@@ -88,8 +108,21 @@ export default function BackgroundPage() {
             className="mt-3 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/90 outline-none placeholder:text-white/40 focus:border-white/25"
             value={university}
             onChange={(e) => setUniversity(e.target.value)}
-            placeholder="e.g. University of Bristol"
+            placeholder="Start typing to search (UK universities)"
+            list="sqez-university-list"
+            autoComplete="off"
+            aria-label="University"
           />
+          <datalist id="sqez-university-list">
+            {UNIVERSITIES_UK.map((u) => (
+              <option key={u} value={u} />
+            ))}
+          </datalist>
+          {!universityValid ? (
+            <div className="mt-2 text-xs text-amber-200/90">
+              Please choose a university from the list (or clear this field to skip).
+            </div>
+          ) : null}
           <div className="mt-3 flex gap-2">
             <button
               type="button"
@@ -104,7 +137,11 @@ export default function BackgroundPage() {
               className="btn btn-outline"
               onClick={() => {
                 setUniversity("");
-                next();
+                // next() reads from state; call with an empty string immediately
+                // by syncing the local variable via a microtask.
+                queueMicrotask(() => {
+                  void next();
+                });
               }}
               disabled={!canContinue}
             >

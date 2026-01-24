@@ -8,11 +8,8 @@ import {
   addDoc,
   collection,
   doc,
-  getDoc,
   runTransaction,
-  increment,
   serverTimestamp,
-  setDoc,
 } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase/client";
@@ -68,6 +65,8 @@ function isYesterdayUTC(prev: Date, now: Date) {
 export default function SessionPage() {
   const searchParams = useSearchParams();
   const topicParam = searchParams.get("topic");
+  const modeParam = searchParams.get("mode"); // "revise" | "revision" | null
+  const idsParam = searchParams.get("ids"); // comma-separated questionIds for revision sessions
 
   // Auth state
   const [authReady, setAuthReady] = useState(false);
@@ -141,18 +140,59 @@ export default function SessionPage() {
 
         const wantedTitle = topicMeta?.title ?? decoded ?? null;
 
-        const scoped = wantedTitle
+        const isRevisionMode = modeParam === "revise" || modeParam === "revision";
+
+        // For revision sessions (from /app/revise), default to ALL topics unless a topic was explicitly provided.
+        const shouldScopeToTopic = Boolean(wantedTitle) && !isRevisionMode;
+
+        const scoped = shouldScopeToTopic
           ? active.filter((q) => {
               const a = (q.topic ?? "").trim().toLowerCase();
-              const b = wantedTitle.trim().toLowerCase();
+              const b = wantedTitle!.trim().toLowerCase();
               return a === b;
             })
           : active;
 
         setQuestions(scoped);
 
-        // Simple pool: shuffle and take 10 (or fewer).
-        const ids = shuffle(scoped.map((q) => q.questionId)).slice(0, 10);
+        // Pool selection:
+        // - Normal sessions: shuffle and take 10 (or fewer).
+        // - Revision sessions:
+        //   a) Prefer IDs passed in query string: ?mode=revise&ids=a,b,c
+        //   b) Back-compat: fall back to sessionStorage("sqez.revision.ids") when mode=revision
+        let ids: string[] = [];
+
+        // a) Query string IDs (preferred)
+        if (isRevisionMode && idsParam) {
+          const wanted = idsParam
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+
+          const available = new Set(scoped.map((qq) => qq.questionId));
+          ids = wanted.filter((id) => available.has(id));
+        }
+
+        // b) Backwards compatible sessionStorage IDs
+        if (ids.length === 0 && modeParam === "revision") {
+          try {
+            const raw = sessionStorage.getItem("sqez.revision.ids");
+            const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+            if (Array.isArray(parsed)) {
+              const wanted = parsed.filter((x): x is string => typeof x === "string");
+              const available = new Set(scoped.map((qq) => qq.questionId));
+              ids = wanted.filter((id) => available.has(id));
+            }
+          } catch {
+            ids = [];
+          }
+        }
+
+        // Default pool
+        if (ids.length === 0) {
+          ids = shuffle(scoped.map((qq) => qq.questionId)).slice(0, 10);
+        }
+
         setPool(ids);
         setPoolIndex(0);
 
@@ -176,7 +216,7 @@ export default function SessionPage() {
     return () => {
       cancelled = true;
     };
-  }, [topicParam, authReady, authUser]);
+  }, [topicParam, modeParam, idsParam, authReady, authUser]);
 
   // --------- Derived current question ----------
   const currentId = pool[poolIndex];
@@ -261,8 +301,11 @@ export default function SessionPage() {
 
       const nextLongest = Math.max(prevLongest, nextStreak);
 
-      const totalAnswered = (Number.isFinite(data.totalAnswered) ? Number(data.totalAnswered) : 0) + 1;
-      const totalCorrect = (Number.isFinite(data.totalCorrect) ? Number(data.totalCorrect) : 0) + (correct ? 1 : 0);
+const totalAnswered =
+  Math.trunc(Number.isFinite(data.totalAnswered) ? Number(data.totalAnswered) : 0) + 1;
+
+const totalCorrect =
+  Math.trunc(Number.isFinite(data.totalCorrect) ? Number(data.totalCorrect) : 0) + (correct ? 1 : 0);
 
       tx.set(
         statsRef,
@@ -277,24 +320,26 @@ export default function SessionPage() {
       );
     });
 
-    // 2) Update users/{uid}/metrics/activityDaily (map of date -> int)
-    const activityRef = doc(db, "users", uid, "metrics", "activityDaily");
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(activityRef);
-      const cur = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
-      const prev = Number.isFinite(cur[todayKey] as number) ? Number(cur[todayKey] as number) : 0;
-      tx.set(activityRef, { ...cur, [todayKey]: Math.trunc(prev + 1) }, { merge: false });
-    });
+    // 2) Update users/{uid}/metrics/activityDaily (map of date -> number)
+// IMPORTANT: Avoid FieldValue.increment() because rules can't type-check transforms.
+const activityRef = doc(db, "users", uid, "metrics", "activityDaily");
+await runTransaction(db, async (tx) => {
+  const snap = await tx.get(activityRef);
+  const cur = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
+  const prev = Number(cur[todayKey] ?? 0) || 0;
+  tx.set(activityRef, { [todayKey]: Math.trunc(prev + 1) }, { merge: true });
+});
 
-    // 3) Update users/{uid}/metrics/lrareDaily (map of date -> int)
-    // Store a daily snapshot. Overwrite today’s value with the latest computed score.
-    const lrareRef = doc(db, "users", uid, "metrics", "lrareDaily");
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(lrareRef);
-      const cur = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
-      const score = Math.trunc(clamp(lrareScore0to100, 0, 100));
-      tx.set(lrareRef, { ...cur, [todayKey]: score }, { merge: false });
-    });
+// 3) Update users/{uid}/metrics/lrareDaily (map of date -> number)
+// Store/overwrite today's snapshot with a real number value.
+const lrareRef = doc(db, "users", uid, "metrics", "lrareDaily");
+await runTransaction(db, async (tx) => {
+  tx.set(
+    lrareRef,
+    { [todayKey]: Math.trunc(clamp(lrareScore0to100, 0, 100)) },
+    { merge: true },
+  );
+});
   }
 
   async function writeQuestionStat(args: {
@@ -447,6 +492,7 @@ export default function SessionPage() {
       setPoolIndex((v) => v + 1);
       setSaving(false);
     } catch (e: unknown) {
+      console.error("Session save failed", e);
       setSaving(false);
       setSaveError(
         e instanceof Error ? e.message : "Couldn’t save. Please try again.",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -13,72 +13,80 @@ type UserDoc = {
   betaUnlimited?: boolean;
 };
 
+type GateState =
+  | { kind: "loading" }
+  | { kind: "ready"; user: User; doc: UserDoc | null }
+  | { kind: "error"; user: User };
+
 export function ProGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [userDoc, setUserDoc] = useState<UserDoc | null>(null);
-  const [ready, setReady] = useState(false);
+  const [state, setState] = useState<GateState>({ kind: "loading" });
 
   const allowWithoutPro = useMemo(() => {
     const p = pathname || "";
-    // Adjust if your account URL is /app/account rather than /app/app/account
-return (
-  p.startsWith("/app/upgrade") ||
-  p.startsWith("/app/not-pro") ||
-  p.startsWith("/app/account") ||
-  p.startsWith("/app/app/account")
-);
+    return (
+      p.startsWith("/app/upgrade") ||
+      p.startsWith("/app/not-pro") ||
+      p.startsWith("/app/account") ||
+      p.startsWith("/app/app/account")
+    );
   }, [pathname]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       if (!u) {
-        const next = encodeURIComponent(pathname || "/app/upgrade");
+        const next = encodeURIComponent(pathname || "/app");
         router.replace(`/auth?next=${next}`);
         return;
       }
-      setAuthUser(u);
+
+      // We have a user, but we still need to confirm entitlement from Firestore.
+      setState({ kind: "loading" });
+
+      const ref = doc(db, "users", u.uid);
+      const unsubDoc = onSnapshot(
+        ref,
+        (snap) => {
+          const data = (snap.data() as UserDoc) || null;
+          setState({ kind: "ready", user: u, doc: data });
+        },
+        (err) => {
+          // IMPORTANT:
+          // Do NOT treat Firestore read failures as "not Pro".
+          // During MFA / token refresh / transient rule issues, this can incorrectly
+          // bounce paid users to /app/not-pro.
+          console.error("ProGate snapshot error", err);
+          setState({ kind: "error", user: u });
+        },
+      );
+
+      return () => unsubDoc();
     });
 
     return () => unsub();
   }, [router, pathname]);
 
   useEffect(() => {
-    if (!authUser) return;
+    if (state.kind !== "ready") return;
 
-    const ref = doc(db, "users", authUser.uid);
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        setUserDoc((snap.data() as UserDoc) || null);
-        setReady(true);
-      },
-      () => {
-        setUserDoc(null);
-        setReady(true);
-      },
-    );
+    const userDoc = state.doc;
 
-    return () => unsub();
-  }, [authUser]);
-
-  useEffect(() => {
-    if (!ready) return;
-
-    // If we can't read the doc, treat as not entitled.
+    // Single source of truth: users/{uid}.isPro
     const isPro =
       Boolean(userDoc?.isPro) ||
       Boolean(userDoc?.betaUnlimited) ||
-      String(userDoc?.subscriptionTier || "").toLowerCase().includes("pro");
+      String(userDoc?.subscriptionTier || "")
+        .toLowerCase()
+        .includes("pro");
 
     if (!isPro && !allowWithoutPro) {
       router.replace("/app/not-pro");
     }
-  }, [ready, userDoc, allowWithoutPro, router]);
+  }, [state, allowWithoutPro, router]);
 
-  if (!ready) {
+  if (state.kind === "loading") {
     return (
       <div className="min-h-dvh bg-[#0a1a2f] text-[#eaeaea] flex items-center justify-center px-6">
         <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-5 text-sm text-white/80">
@@ -88,7 +96,37 @@ return (
     );
   }
 
-  // If not pro and this route is allowed, show it.
-  // If not pro and route is not allowed, we already redirected.
+  if (state.kind === "error") {
+    // Keep the user in-app and let them retry, rather than falsely denying.
+    return (
+      <div className="min-h-dvh bg-[#0a1a2f] text-[#eaeaea] flex items-center justify-center px-6">
+        <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-white/5 px-6 py-6">
+          <div className="text-sm font-semibold">Can’t confirm Pro access yet</div>
+          <div className="mt-2 text-sm text-white/75">
+            We couldn’t read your account entitlement from Firestore. This is usually
+            temporary (token refresh / network). Please refresh.
+          </div>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              className="btn btn-primary w-full sm:w-auto"
+              onClick={() => window.location.reload()}
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline w-full sm:w-auto"
+              onClick={() => router.replace("/app/account")}
+            >
+              Go to account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // state.kind === "ready"
   return <>{children}</>;
 }

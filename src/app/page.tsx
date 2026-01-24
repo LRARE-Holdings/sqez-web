@@ -223,14 +223,13 @@ export default function HomePage() {
             </div>
 
             <h1 className="mt-6 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-              Build the habit.
-              <span className="block text-white/85">Pass the SQE.</span>
+              Ready?
+              <span className="block text-white/85">Let's master the SQE.</span>
             </h1>
 
             <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/80 sm:text-base">
-              SQEz is mobile-first, behaviour-driven revision for SQE1 &amp; SQE2.
-              Do a short daily session, review intelligently, and build confidence
-              you can actually measure.
+              SQEz is the ultimate platform for aspiring solicitors and law students
+              who want to master their solicitors' qualifying exams.
             </p>
 
             <div className="mt-6 flex flex-col gap-2 sm:flex-row">
@@ -289,7 +288,7 @@ export default function HomePage() {
                   Pricing
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/80">
-                  One plan. Two ways to pay. Annual is best value.
+                  One plan. Two ways to pay.
                 </p>
                 <p className="mt-1 text-xs text-white/60">
                   Prices shown are for the web. App Store pricing differs.
@@ -439,7 +438,7 @@ export default function HomePage() {
               How SQEz works
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/80">
-              Built around short sessions and high-quality review. No endless
+              Built around short sessions and high-quality review. <br></br>No endless
               reading. No hype. Just repetition that sticks.
             </p>
 

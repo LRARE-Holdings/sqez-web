@@ -48,7 +48,17 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
 
     if (isAppExemptPath(pathname)) return;
 
+    // IMPORTANT: manage the Firestore unsubscribe ourselves.
+    // Returning a cleanup function from the onAuthStateChanged callback does NOT work.
+    let unsubDoc: (() => void) | null = null;
+
     const unsubAuth = onAuthStateChanged(auth, (user) => {
+      // Always tear down any prior doc listener when auth changes.
+      if (unsubDoc) {
+        unsubDoc();
+        unsubDoc = null;
+      }
+
       if (!user) {
         setState({ kind: "unauthed" });
         const next = encodeURIComponent(pathname);
@@ -56,14 +66,17 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // While we (re)attach the snapshot listener, keep loading.
+      setState({ kind: "loading" });
+
       // User is authed → watch Firestore for onboardingCompleted
       const userRef = doc(db, "users", user.uid);
 
-      const unsubDoc = onSnapshot(
+      unsubDoc = onSnapshot(
         userRef,
         (snap) => {
           const data = snap.data() as any;
-          const onboardingCompleted = Boolean(data?.onboardingCompleted);
+          const onboardingCompleted = data?.onboardingCompleted === true;
 
           setState({ kind: "authed", onboardingCompleted });
 
@@ -73,17 +86,17 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
         },
         (err) => {
           console.error("OnboardingGate snapshot error", err);
-          // If we can't read user doc, treat as not onboarded to be safe
-          setState({ kind: "authed", onboardingCompleted: false });
-          router.replace("/onboarding");
+          // Do NOT force a redirect on transient errors.
+          // Keep gate in loading so we don't bounce already-onboarded users.
+          setState({ kind: "loading" });
         },
       );
-
-      // cleanup doc listener when auth changes
-      return () => unsubDoc();
     });
 
-    return () => unsubAuth();
+    return () => {
+      if (unsubDoc) unsubDoc();
+      unsubAuth();
+    };
   }, [pathname, router]);
 
   // Only block rendering for gated /app routes (avoid blanking public pages)

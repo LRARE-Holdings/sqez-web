@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase/client";
 
@@ -19,36 +19,41 @@ export default function UpgradePage() {
   const [detail, setDetail] = useState<string>("");
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
+    let unsubDoc: (() => void) | null = null;
+    let redirectTimer: number | null = null;
+
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      // Always tear down any previous doc listener / timer
+      if (unsubDoc) {
+        unsubDoc();
+        unsubDoc = null;
+      }
+      if (redirectTimer) {
+        window.clearTimeout(redirectTimer);
+        redirectTimer = null;
+      }
+
       if (!user) {
         router.replace("/auth?next=%2Fapp%2Fupgrade");
         return;
       }
 
       setStatus("waiting-entitlement");
+      setDetail("Finalising your upgrade… this can take a few seconds.");
 
       // ✅ Single source of truth: users/{uid}.isPro
       const ref = doc(db, "users", user.uid);
 
-      const unsubDoc = onSnapshot(
+      unsubDoc = onSnapshot(
         ref,
         (snap) => {
           const data = snap.data() as any;
 
           if (data?.isPro === true) {
-            // Safety net: ensure onboardingCompleted is true once Pro is active
-            void setDoc(
-              doc(db, "users", user.uid),
-              { onboardingCompleted: true, updatedAt: serverTimestamp() },
-              { merge: true },
-            );
-
             setStatus("active");
-            setTimeout(() => router.replace("/app"), 900);
-            return;
+            // Keep the brief success state, but avoid stacking timers in dev/HMR.
+            redirectTimer = window.setTimeout(() => router.replace("/app"), 900);
           }
-
-          setDetail("Finalising your upgrade… this can take a few seconds.");
         },
         (err) => {
           console.error(err);
@@ -56,11 +61,13 @@ export default function UpgradePage() {
           setDetail("We couldn’t confirm your upgrade yet. Please refresh.");
         },
       );
-
-      return () => unsubDoc();
     });
 
-    return () => unsub();
+    return () => {
+      if (unsubDoc) unsubDoc();
+      if (redirectTimer) window.clearTimeout(redirectTimer);
+      unsubAuth();
+    };
   }, [router]);
 
   return (

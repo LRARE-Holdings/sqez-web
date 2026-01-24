@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { doc, onSnapshot, type Timestamp } from "firebase/firestore";
 
@@ -13,6 +14,11 @@ type UserDoc = {
   lastName?: string;
   email?: string;
   onboarding?: Record<string, unknown>;
+
+  // Entitlement flags (single source of truth)
+  isPro?: boolean;
+  subscriptionTier?: string;
+  betaUnlimited?: boolean;
 };
 
 function asNumber(v: unknown): number | null {
@@ -94,6 +100,8 @@ async function startCheckout(user: User, plan: "MONTHLY" | "ANNUAL") {
 }
 
 export default function NotProPage() {
+  const router = useRouter();
+
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [userDoc, setUserDoc] = useState<UserDoc | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,6 +112,10 @@ export default function NotProPage() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setAuthUser(u ?? null);
+      if (!u) {
+        setUserDoc(null);
+        setLoading(false);
+      }
     });
     return () => unsub();
   }, []);
@@ -123,7 +135,8 @@ export default function NotProPage() {
         setUserDoc((snap.data() as UserDoc) || null);
         setLoading(false);
       },
-      () => {
+      (err) => {
+        console.error("not-pro user snapshot error", err);
         setUserDoc(null);
         setLoading(false);
       },
@@ -131,6 +144,22 @@ export default function NotProPage() {
 
     return () => unsub();
   }, [authUser]);
+
+  const isPro = useMemo(() => {
+    if (!userDoc) return false;
+    if (userDoc.isPro === true) return true;
+    if (userDoc.betaUnlimited === true) return true;
+    const tier = String(userDoc.subscriptionTier ?? "").toLowerCase();
+    return tier.includes("pro");
+  }, [userDoc]);
+
+  useEffect(() => {
+    // If the user is Pro, this page should never be shown.
+    // Redirect to the app home once we have finished loading the doc.
+    if (!loading && authUser && isPro) {
+      router.replace("/app");
+    }
+  }, [loading, authUser, isPro, router]);
 
   const rec = useMemo(() => {
     return inferRecommendation(userDoc?.onboarding);
@@ -184,6 +213,8 @@ export default function NotProPage() {
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm text-white/80">
             {loading ? (
               <>Checking your account…</>
+            ) : isPro ? (
+              <>You’re Pro — redirecting…</>
             ) : (
               <>
                 Hi <span className="font-semibold text-white">{displayName}</span>. You’re

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { auth, db } from "@/lib/firebase/client";
 
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { OnboardingShell } from "@/components/onboarding/OnboardingShell";
 import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
@@ -62,23 +62,56 @@ export default function PlanPage() {
   const { answers } = useOnboarding();
 
   const [loadingPlan, setLoadingPlan] = useState<null | "MONTHLY" | "ANNUAL">(null);
+  const [checkingEntitlement, setCheckingEntitlement] = useState(true);
 
   const rec = useMemo(() => recommendPlan(answers.examWindow), [answers.examWindow]);
 
   useEffect(() => {
     const user = auth.currentUser;
-    if (!user) return;
 
-    // Firestore is the single source of truth for gating.
-    void setDoc(
-      doc(db, "users", user.uid),
-      {
-        onboardingCompleted: true,
-        updatedAt: serverTimestamp(),
+    // If not signed in, we can't check Firestore entitlement.
+    // Allow the page to render (it will push to /auth on checkout).
+    if (!user) {
+      setCheckingEntitlement(false);
+      return;
+    }
+
+    const ref = doc(db, "users", user.uid);
+
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        const data = snap.data() as { isPro?: boolean } | undefined;
+        const isPro = Boolean(data?.isPro);
+
+        if (isPro) {
+          // If already Pro, plan page should never show.
+          router.replace("/app");
+          return;
+        }
+
+        // Not Pro — allow this page to render.
+        setCheckingEntitlement(false);
+
+        // Mark onboarding completed (best-effort) once we know they aren't Pro.
+        void setDoc(
+          ref,
+          {
+            onboardingCompleted: true,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
       },
-      { merge: true },
+      (err) => {
+        console.error("PlanPage entitlement listener failed", err);
+        // Fail open: allow rendering.
+        setCheckingEntitlement(false);
+      },
     );
-  }, []);
+
+    return () => unsub();
+  }, [router]);
 
   async function startCheckout(plan: "MONTHLY" | "ANNUAL") {
     if (loadingPlan) return;
@@ -129,6 +162,27 @@ export default function PlanPage() {
       console.error(e);
       setLoadingPlan(null);
     }
+  }
+
+  if (checkingEntitlement) {
+    return (
+      <OnboardingShell
+        step={6}
+        total={6}
+        title="Checking your plan…"
+        subtitle="Just a moment."
+        backHref="/onboarding/background"
+      >
+        <div className="grid gap-4">
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            <div className="h-4 w-40 rounded bg-white/10" />
+            <div className="mt-3 h-7 w-56 rounded bg-white/10" />
+            <div className="mt-3 h-4 w-full rounded bg-white/10" />
+            <div className="mt-6 h-10 w-full rounded bg-white/10" />
+          </div>
+        </div>
+      </OnboardingShell>
+    );
   }
 
   const headline =
