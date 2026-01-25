@@ -3,7 +3,6 @@ export const UNIVERSITIES_UK = [
   "Anglia Ruskin University",
   "Arts University Bournemouth",
   "Aston University",
-  "Bangor University",
   "Bath Spa University",
   "Birmingham City University",
   "Birkbeck, University of London",

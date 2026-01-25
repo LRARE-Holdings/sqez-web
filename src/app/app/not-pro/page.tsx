@@ -170,7 +170,19 @@ export default function NotProPage() {
     const annual = 79.99;
     const annualAsMonthly = annual / 12;
     const savingsPct = Math.round(((monthly - annualAsMonthly) / monthly) * 100);
-    return { monthly, annual, annualAsMonthly, savingsPct };
+
+    // Trials (hosted Stripe Checkout):
+    const trialMonthlyDays = 14;
+    const trialAnnualDays = 30;
+
+    return {
+      monthly,
+      annual,
+      annualAsMonthly,
+      savingsPct,
+      trialMonthlyDays,
+      trialAnnualDays,
+    };
   }, []);
 
   const displayName = useMemo(() => {
@@ -207,14 +219,14 @@ export default function NotProPage() {
     <div className="grid gap-6">
       <AppCard
         title="SQEz Web is Pro-only"
-        subtitle="To use SQEz on desktop, you’ll need an active SQEz Pro subscription."
+        subtitle="Start with a free trial on either plan, then keep going with SQEz Pro."
       >
         <div className="mt-2 grid gap-5">
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm text-white/80">
             {loading ? (
               <>Checking your account…</>
-            ) : isPro ? (
-              <>You’re Pro — redirecting…</>
+            ) : isPro ? ( 
+              <>You’re Pro. Redirecting…</>
             ) : (
               <>
                 Hi <span className="font-semibold text-white">{displayName}</span>. You’re
@@ -226,11 +238,11 @@ export default function NotProPage() {
 
           {onboardingHint ? (
             <div className="rounded-2xl border border-white/10 px-4 py-4 text-sm text-white/80">
-              Based on your onboarding, we think that the following plan would work best...
+              Based on your onboarding, we think the plan below fits best, and you can start with a free trial.
             </div>
           ) : (
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm text-white/80">
-              Choose a plan to unlock SQEz Web. Annual is best value for most students.
+              Choose a plan to unlock SQEz Web. Both plans include a free trial, then you’ll be billed unless you cancel.
             </div>
           )}
 
@@ -267,16 +279,24 @@ export default function NotProPage() {
                     Suggested for you
                   </span>
                 ) : (
-                  <span className="chip">Save {prices.savingsPct}%</span>
+                  <span className="chip">Free trial - {prices.trialAnnualDays} days</span>
                 )}
               </div>
 
               <div className="mt-4">
-                <div className="text-3xl font-semibold text-white">
+                <div className="text-sm font-semibold text-white">
+                  Free trial - {prices.trialAnnualDays} days
+                </div>
+
+                <div className="mt-2 text-2xl font-semibold text-white">
                   £{prices.annual.toFixed(2)}
                 </div>
                 <div className="mt-1 text-sm text-white/70">
                   ≈ £{prices.annualAsMonthly.toFixed(2)}/month billed yearly
+                </div>
+                <div className="mt-2 text-xs text-white/60">
+                  No charge today. Trial ends after {prices.trialAnnualDays} days, then £{prices.annual.toFixed(2)}/year.
+                  Cancel anytime.
                 </div>
               </div>
 
@@ -325,15 +345,23 @@ export default function NotProPage() {
                     Suggested for you
                   </span>
                 ) : (
-                  <span className="chip">Flexible</span>
+                  <span className="chip">Free trial - {prices.trialMonthlyDays} days</span>
                 )}
               </div>
 
               <div className="mt-4">
-                <div className="text-3xl font-semibold text-white">
+                <div className="text-sm font-semibold text-white">
+                  Free trial - {prices.trialMonthlyDays} days
+                </div>
+
+                <div className="mt-2 text-2xl font-semibold text-white">
                   £{prices.monthly.toFixed(2)}
                 </div>
                 <div className="mt-1 text-sm text-white/70">per month</div>
+                <div className="mt-2 text-xs text-white/60">
+                  No charge today. Trial ends after {prices.trialMonthlyDays} days, then £{prices.monthly.toFixed(2)}/month.
+                  Cancel anytime.
+                </div>
               </div>
 
               <ul className="mt-4 grid gap-2 text-sm text-white/75">
@@ -382,8 +410,7 @@ export default function NotProPage() {
           </div>
 
           <div className="text-xs text-white/55">
-            If you’ve just upgraded, it can take a moment for Stripe to confirm your entitlement.
-            Refresh once checkout completes.
+            After checkout, your trial starts immediately. It may take a moment to confirm your entitlement.
           </div>
         </div>
       </AppCard>

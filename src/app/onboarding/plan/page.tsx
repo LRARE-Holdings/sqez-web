@@ -1,59 +1,105 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-
-import { auth, db } from "@/lib/firebase/client";
-
+import { onAuthStateChanged, type User } from "firebase/auth";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 
+import { auth, db } from "@/lib/firebase/client";
 import { OnboardingShell } from "@/components/onboarding/OnboardingShell";
 import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import { recommendPlan } from "@/lib/onboarding/store";
 import { writeOnboarding } from "@/lib/onboarding/firestore";
 
-const WEB_MONTHLY = "£14.99 / month";
-const WEB_ANNUAL = "£79.99 / year";
+const PRICE_MONTHLY = 14.99;
+const PRICE_ANNUAL = 79.99;
 
-function PlanCard({
-  title,
-  price,
-  highlight,
-  subtitle,
-  cta,
+const TRIAL_MONTHLY_DAYS = 14;
+const TRIAL_ANNUAL_DAYS = 30;
+
+function formatGBP(n: number) {
+  return `£${n.toFixed(2)}`;
+}
+
+function cx(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
+
+type Plan = "MONTHLY" | "ANNUAL";
+
+function PlanOption({
+  label,
+  plan,
+  recommended,
+  trialDays,
+  primaryLine,
+  secondaryLine,
+  finePrint,
   disabled,
-  onClick,
+  onChoose,
 }: {
-  title: string;
-  price: string;
-  subtitle: string;
-  highlight?: boolean;
-  cta: string;
-  disabled?: boolean;
-  onClick: () => void;
+  label: string;
+  plan: Plan;
+  recommended: boolean;
+  trialDays: number;
+  primaryLine: string;
+  secondaryLine: string;
+  finePrint: string;
+  disabled: boolean;
+  onChoose: (plan: Plan) => void;
 }) {
   return (
-    <div
-      className={[
-        "rounded-3xl border p-6 transition",
-        highlight
-          ? "border-white/25 bg-white/10"
-          : "border-white/10 bg-white/5 hover:bg-white/8",
-      ].join(" ")}
+    <button
+      type="button"
+      onClick={() => onChoose(plan)}
+      disabled={disabled}
+      className={cx(
+        "group w-full text-left rounded-2xl border p-4 transition",
+        "focus:outline-none focus:ring-2 focus:ring-white/15",
+        recommended
+          ? "border-emerald-400/35 bg-white/10"
+          : "border-white/10 bg-white/5 hover:bg-white/10",
+        disabled ? "opacity-70 cursor-not-allowed" : "cursor-pointer",
+      )}
     >
-      <div className="text-sm font-semibold text-white">{title}</div>
-      <div className="mt-2 text-2xl font-semibold text-white">{price}</div>
-      <div className="mt-2 text-sm text-white/70">{subtitle}</div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-sm font-semibold text-white">{label}</div>
+            {recommended ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-50">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Recommended
+              </span>
+            ) : null}
+          </div>
 
-      <button
-        type="button"
-        className="btn btn-primary mt-5 w-full"
-        onClick={onClick}
-        disabled={disabled}
-      >
-        {disabled ? "Redirecting…" : cta}
-      </button>
-    </div>
+          <div className="mt-2 text-sm text-white/85">
+            <span className="font-semibold text-white">
+              Free trial — {trialDays} days
+            </span>
+            <span className="text-white/65"> · {primaryLine}</span>
+          </div>
+
+          <div className="mt-1 text-xs text-white/60">{secondaryLine}</div>
+        </div>
+
+        <div className="shrink-0">
+          <span
+            className={cx(
+              "inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold",
+              recommended ? "bg-emerald-400/15 text-emerald-50" : "bg-white/5 text-white/80",
+              "group-hover:bg-white/10",
+            )}
+          >
+            {disabled ? "Redirecting…" : "Choose"}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-3 text-[11px] text-white/50">{finePrint}</div>
+    </button>
   );
 }
 
@@ -61,22 +107,39 @@ export default function PlanPage() {
   const router = useRouter();
   const { answers } = useOnboarding();
 
-  const [loadingPlan, setLoadingPlan] = useState<null | "MONTHLY" | "ANNUAL">(null);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authResolved, setAuthResolved] = useState(false);
+
+  const [loadingPlan, setLoadingPlan] = useState<null | Plan>(null);
   const [checkingEntitlement, setCheckingEntitlement] = useState(true);
 
   const rec = useMemo(() => recommendPlan(answers.examWindow), [answers.examWindow]);
 
-  useEffect(() => {
-    const user = auth.currentUser;
+  const annualAsMonthly = useMemo(() => PRICE_ANNUAL / 12, []);
+  const savingsPct = useMemo(() => {
+    const pct = Math.round(((PRICE_MONTHLY - annualAsMonthly) / PRICE_MONTHLY) * 100);
+    return Number.isFinite(pct) ? Math.max(0, pct) : 0;
+  }, [annualAsMonthly]);
 
-    // If not signed in, we can't check Firestore entitlement.
-    // Allow the page to render (it will push to /auth on checkout).
-    if (!user) {
+  // 1) Resolve auth properly
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setAuthUser(u ?? null);
+      setAuthResolved(true);
+    });
+    return () => unsub();
+  }, []);
+
+  // 2) Attach entitlement listener once auth has resolved
+  useEffect(() => {
+    if (!authResolved) return;
+
+    if (!authUser) {
       setCheckingEntitlement(false);
       return;
     }
 
-    const ref = doc(db, "users", user.uid);
+    const ref = doc(db, "users", authUser.uid);
 
     const unsub = onSnapshot(
       ref,
@@ -85,39 +148,32 @@ export default function PlanPage() {
         const isPro = Boolean(data?.isPro);
 
         if (isPro) {
-          // If already Pro, plan page should never show.
           router.replace("/app");
           return;
         }
 
-        // Not Pro — allow this page to render.
         setCheckingEntitlement(false);
 
-        // Mark onboarding completed (best-effort) once we know they aren't Pro.
+        // Reaching plan step means onboarding is done (web flow)
         void setDoc(
           ref,
-          {
-            onboardingCompleted: true,
-            updatedAt: serverTimestamp(),
-          },
+          { onboardingCompleted: true, updatedAt: serverTimestamp() },
           { merge: true },
         );
       },
       (err) => {
         console.error("PlanPage entitlement listener failed", err);
-        // Fail open: allow rendering.
         setCheckingEntitlement(false);
       },
     );
 
     return () => unsub();
-  }, [router]);
+  }, [authResolved, authUser, router]);
 
-  async function startCheckout(plan: "MONTHLY" | "ANNUAL") {
+  async function startCheckout(plan: Plan) {
     if (loadingPlan) return;
 
-    const user = auth.currentUser;
-    if (!user) {
+    if (!authUser) {
       router.push("/auth?next=%2Fonboarding%2Fplan");
       return;
     }
@@ -125,7 +181,7 @@ export default function PlanPage() {
     setLoadingPlan(plan);
 
     try {
-      const token = await user.getIdToken();
+      const token = await authUser.getIdToken();
 
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
@@ -139,7 +195,6 @@ export default function PlanPage() {
       const data = (await res.json()) as { url?: string; error?: string };
 
       if (data.url) {
-        // Persist recommendation + chosen plan in Firestore (single source of truth)
         try {
           await writeOnboarding({
             recommendedPlan: rec.kind,
@@ -150,8 +205,6 @@ export default function PlanPage() {
           console.error("writeOnboarding(plan) failed", e);
         }
 
-        // Redirect to Stripe Checkout. Onboarding completion is confirmed on /app/upgrade
-        // once Firestore entitlement (users/{uid}.isPro) is true.
         window.location.assign(data.url);
         return;
       }
@@ -164,67 +217,108 @@ export default function PlanPage() {
     }
   }
 
-  if (checkingEntitlement) {
+  if (!authResolved || checkingEntitlement) {
     return (
       <OnboardingShell
         step={6}
         total={6}
-        title="Checking your plan…"
-        subtitle="Just a moment."
+        title="Preparing…"
+        subtitle="Loading your plan options."
         backHref="/onboarding/background"
       >
-        <div className="grid gap-4">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-            <div className="h-4 w-40 rounded bg-white/10" />
-            <div className="mt-3 h-7 w-56 rounded bg-white/10" />
-            <div className="mt-3 h-4 w-full rounded bg-white/10" />
-            <div className="mt-6 h-10 w-full rounded bg-white/10" />
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div className="h-4 w-40 rounded bg-white/10" />
+          <div className="mt-3 h-4 w-full rounded bg-white/10" />
+          <div className="mt-6 grid gap-3">
+            <div className="h-20 rounded-2xl bg-white/10" />
+            <div className="h-20 rounded-2xl bg-white/10" />
           </div>
         </div>
       </OnboardingShell>
     );
   }
 
-  const headline =
+  const recommendedPlan: Plan =
+    rec.kind === "MONTHLY" ? "MONTHLY" : "ANNUAL";
+
+  const subtitle =
     rec.kind === "MONTHLY"
-      ? "Monthly is the best fit for your timeline."
+      ? "We recommend Monthly for your timeline."
       : rec.kind === "ANNUAL"
-        ? "Annual is the best value for your study runway."
-        : "Most people in your position choose annual — but you can pick either.";
+        ? "We recommend Annual for value across your runway."
+        : "Annual is best value for most students — but either works.";
 
   return (
     <OnboardingShell
       step={6}
       total={6}
-      title="Your recommended SQEz plan"
-      subtitle={`Based on your timeline. ${headline}`}
+      title="Choose your plan"
+      subtitle={subtitle}
       backHref="/onboarding/background"
     >
       <div className="grid gap-4">
-        <div className="text-xs text-white/60">
-          Recommended runway: <span className="text-white/80">{rec.runwayMonths} months</span>
+        {/* Tight recommendation summary */}
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-white">Recommended runway</div>
+              <div className="mt-1 text-xs text-white/60">
+                Based on your onboarding answers
+              </div>
+            </div>
+
+            <div className="text-right">
+              <div className="text-sm font-semibold text-white">
+                {rec.runwayMonths} months
+              </div>
+              <div className="mt-1 text-[11px] text-white/50">
+                Full access starts immediately
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="chip">Card required</span>
+            <span className="chip">£0 today</span>
+            <span className="chip">Cancel anytime</span>
+          </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <PlanCard
-            title="SQEz Pro — Annual"
-            price={WEB_ANNUAL}
-            subtitle="Best value for longer study periods. Uninterrupted access."
-            highlight={rec.kind === "ANNUAL" || rec.kind === "COMPARE"}
-            cta="Choose annual"
+        {/* Options */}
+        <div className="grid gap-3">
+          <PlanOption
+            label="Annual"
+            plan="ANNUAL"
+            recommended={recommendedPlan === "ANNUAL"}
+            trialDays={TRIAL_ANNUAL_DAYS}
+            primaryLine={`${formatGBP(PRICE_ANNUAL)} / year`}
+            secondaryLine={`≈ ${formatGBP(annualAsMonthly)}/month · Save ~${savingsPct}% vs monthly`}
+            finePrint={`After ${TRIAL_ANNUAL_DAYS} days, billed annually unless you cancel before the trial ends.`}
             disabled={loadingPlan !== null}
-            onClick={() => startCheckout("ANNUAL")}
+            onChoose={startCheckout}
           />
 
-          <PlanCard
-            title="SQEz Pro — Monthly"
-            price={WEB_MONTHLY}
-            subtitle="Best for short timelines or flexibility. Cancel anytime."
-            highlight={rec.kind === "MONTHLY"}
-            cta="Choose monthly"
+          <PlanOption
+            label="Monthly"
+            plan="MONTHLY"
+            recommended={recommendedPlan === "MONTHLY"}
+            trialDays={TRIAL_MONTHLY_DAYS}
+            primaryLine={`${formatGBP(PRICE_MONTHLY)} / month`}
+            secondaryLine="Maximum flexibility · Cancel any time"
+            finePrint={`After ${TRIAL_MONTHLY_DAYS} days, billed monthly unless you cancel before the trial ends.`}
             disabled={loadingPlan !== null}
-            onClick={() => startCheckout("MONTHLY")}
+            onChoose={startCheckout}
           />
+        </div>
+
+        {/* Micro footer */}
+        <div className="text-[11px] leading-relaxed text-white/50">
+          You’ll be redirected to Stripe Checkout. If you return and still see this page,
+          refresh once — entitlement can take a moment to confirm.{" "}
+          <Link href="/legal" className="underline underline-offset-2">
+            Terms
+          </Link>
+          .
         </div>
       </div>
     </OnboardingShell>
