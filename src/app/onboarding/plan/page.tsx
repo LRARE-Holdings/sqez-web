@@ -261,7 +261,7 @@ export default function PlanPage() {
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-white">Recommended runway</div>
+              <div className="text-sm font-semibold text-white">Recommended</div>
               <div className="mt-1 text-xs text-white/60">
                 Based on your onboarding answers
               </div>
@@ -269,17 +269,23 @@ export default function PlanPage() {
 
             <div className="text-right">
               <div className="text-sm font-semibold text-white">
-                {rec.runwayMonths} months
+                {recommendedPlan === "MONTHLY" ? "Monthly" : "Annual"}
               </div>
               <div className="mt-1 text-[11px] text-white/50">
-                Full access starts immediately
+                {recommendedPlan === "MONTHLY"
+                  ? `Free trial — ${TRIAL_MONTHLY_DAYS} days`
+                  : `Free trial — ${TRIAL_ANNUAL_DAYS} days`}
               </div>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="chip">Card required</span>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <span className="chip">£0 today</span>
+                        <span className="chip">
+              {recommendedPlan === "MONTHLY"
+                ? `${formatGBP(PRICE_MONTHLY)} / month`
+                : `${formatGBP(PRICE_ANNUAL)} / year`}
+            </span>
             <span className="chip">Cancel anytime</span>
           </div>
         </div>

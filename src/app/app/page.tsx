@@ -257,9 +257,9 @@ export default function DashboardPage() {
   const answered7 = useMemo(() => activity7.reduce((a, b) => a + b, 0), [activity7]);
 
   const headline = useMemo(() => {
-    if (activityDays7 >= 5) return "Strong week — keep it simple and consistent.";
-    if (activityDays7 >= 2) return "Good momentum — one short session today is enough.";
-    return "Let’s get you moving again — 10 questions, no drama.";
+    if (activityDays7 >= 5) return "Strong week! Very well done.";
+    if (activityDays7 >= 2) return "Good momentum, keep it up!";
+    return "Let’s get you moving again!";
   }, [activityDays7]);
 
   const hasStats = Boolean(stats && typeof stats.totalAnswered === "number");
@@ -284,7 +284,7 @@ export default function DashboardPage() {
                 Quickfire
               </div>
               <div className="mt-2 text-sm text-white/75">
-                10 MCQs. Confidence first. Clean autopsy.
+                10 random questions.
               </div>
               <div className="mt-4 inline-flex items-center gap-2 text-xs text-white/60">
                 Start now <ArrowRight className="h-3.5 w-3.5" />
@@ -300,7 +300,7 @@ export default function DashboardPage() {
                 Learn
               </div>
               <div className="mt-2 text-sm text-white/75">
-                Topics, subtopics, and (soon) your notes.
+                Build a custom topic session.
               </div>
             </Link>
 
@@ -313,7 +313,7 @@ export default function DashboardPage() {
                 Progress
               </div>
               <div className="mt-2 text-sm text-white/75">
-                Accuracy, streaks, LRARE, timeline.
+                LRARE Score, streak and more!
               </div>
             </Link>
           </div>
@@ -336,9 +336,6 @@ export default function DashboardPage() {
               />
             </div>
 
-            <div className="mt-3 text-xs text-white/60">
-              A stability-style signal derived from your recent performance (not “tasks due”).
-            </div>
           </div>
         </div>
 
@@ -360,7 +357,7 @@ export default function DashboardPage() {
       {/* LOWER GRID */}
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="lg:col-span-7">
-          <AppCard title="This week" subtitle="A simple visual pulse — no fluff.">
+          <AppCard title="This week" subtitle="How you've been doing this week...">
             <div className="grid gap-3 sm:grid-cols-2">
               <MetricSpark values={activity7} label="Questions answered" />
               <MetricSpark values={lrare7.map((v) => clamp(Number(v) || 0, 0, 100))} label="LRARE over time" />
@@ -389,12 +386,12 @@ export default function DashboardPage() {
           <AppCard title="Quick links">
             <div className="grid gap-3">
               <Link
-                href="/app/session"
+                href="/app/notes"
                 className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4 hover:bg-white/7 !no-underline"
               >
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-white">Start a Quickfire</div>
-                  <div className="mt-1 text-xs text-white/60">Fast reps. Immediate clarity.</div>
+                  <div className="text-sm font-semibold text-white">View my notes</div>
+                  <div className="mt-1 text-xs text-white/60">Read up on what you've put down.</div>
                 </div>
                 <ArrowRight className="h-4 w-4 text-white/50" />
               </Link>

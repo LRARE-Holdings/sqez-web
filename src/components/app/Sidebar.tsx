@@ -10,6 +10,10 @@ import {
   User,
   X,
   Menu,
+  NotebookTabs,
+  Gavel,
+  GavelIcon,
+  FileBadge,
 } from "lucide-react";
 
 type NavItem = {
@@ -23,6 +27,9 @@ const NAV: NavItem[] = [
   { href: "/app", label: "Home", hint: "Dashboard", icon: Home },
   { href: "/app/learn", label: "Learn", hint: "Topics", icon: BookOpen },
   { href: "/app/revise", label: "Revise", hint: "Quickfire + review", icon: Zap },
+  { href: "/app/notes", label: "Notes", hint: "Topic notes", icon: NotebookTabs },
+  { href: "/app/statutes", label: "Statutes", hint: "Important statutes", icon: FileBadge },
+  { href: "/app/cases", label: "Cases", hint: "Important cases", icon: GavelIcon },
   { href: "/app/progress", label: "Progress", hint: "Trends + insights", icon: TrendingUp },
   { href: "/app/account", label: "Account", hint: "Billing + settings", icon: User },
 ];

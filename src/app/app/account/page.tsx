@@ -111,6 +111,9 @@ function tierLabel(raw?: string) {
 }
 
 async function openBillingPortal(returnPath: string) {
+  // This creates a Stripe Customer Portal session server-side.
+  // If you have a Stripe-hosted portal custom domain, Stripe will return a URL on that domain
+  // (e.g. https://pay.lrare.co.uk/p/...)
   const res = await fetch("/api/stripe/portal", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -120,6 +123,8 @@ async function openBillingPortal(returnPath: string) {
   if (!res.ok) throw new Error(`Portal request failed (${res.status})`);
   const data = (await res.json()) as { url?: string; error?: string };
   if (!data.url) throw new Error(data.error || "No portal url returned");
+
+  // Stripe returns the fully-qualified portal session URL (often on your portal custom domain).
   window.location.assign(data.url);
 }
 
@@ -251,7 +256,7 @@ export default function AccountPage() {
     const fromTier = String(tier || "").toLowerCase();
 
     if (fromSub.includes("stripe") || fromUser === "stripe" || fromTier.includes("web"))
-      return "Stripe (web)";
+      return "Stripe (pay.lrare.co.uk)";
     if (fromSub.includes("apple") || fromUser === "apple" || fromTier.includes("apple"))
       return "Apple (iOS)";
     if (!fromSub && !fromUser) return "—";
@@ -283,9 +288,22 @@ export default function AccountPage() {
 
   async function handleManageBilling() {
     setBanner(null);
+
+    // If the user is billed via Apple, Stripe portal won't help.
+    if (billingProvider === "Apple (iOS)") {
+      setBanner({
+        tone: "warn",
+        title: "Managed on iOS",
+        message: "Your subscription is billed via Apple. Manage it in the App Store (Subscriptions).",
+      });
+      return;
+    }
+
     try {
       await openBillingPortal("/app/account");
-    } catch {
+    } catch (e) {
+      console.error(e);
+      // Fallback: send them to pricing/upgrade page if portal is unavailable
       router.push("/app/upgrade");
     }
   }
@@ -530,7 +548,7 @@ export default function AccountPage() {
                 className="btn btn-primary px-4 py-2 !no-underline"
                 onClick={handleManageBilling}
               >
-                Manage
+                Manage billing
                 <ArrowRight className="ml-2 h-4 w-4" />
               </button>
             </div>
@@ -542,8 +560,8 @@ export default function AccountPage() {
                   {billingProvider}
                 </div>
                 <div className="mt-2 text-xs text-white/60">
-                  {billingProvider === "Stripe (web)"
-                    ? "Managed here on web."
+                  {billingProvider === "Stripe (pay.lrare.co.uk)"
+                    ? "Managed via pay.lrare.co.uk."
                     : billingProvider === "Apple (iOS)"
                       ? "Managed via App Store."
                       : "—"}
@@ -602,8 +620,7 @@ export default function AccountPage() {
             </div>
 
             <div className="mt-3 text-xs text-white/55">
-              “Manage” opens the Stripe billing portal if enabled, otherwise routes to
-              your upgrade flow.
+              Manage billing opens the Stripe customer portal (hosted at pay.lrare.co.uk) when available. If it can’t be opened, you’ll be routed to the upgrade page.
             </div>
           </div>
         </div>

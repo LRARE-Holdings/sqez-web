@@ -17,6 +17,7 @@ import {
 
 import { AppCard, AppCardSoft } from "@/components/ui/AppCard";
 import { allTopics } from "@/lib/topicCatalog";
+import { subtopicsForTopicKey, subtopicsForTopicName } from "@/lib/catalog/subtopics";
 import { auth, db } from "@/lib/firebase/client";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
@@ -33,6 +34,17 @@ function safeDecode(v: string): string {
 
 function compact(s: string): string {
   return s.replace(/\s+/g, "").trim();
+}
+
+function normalizeTopicKey(k: string): string {
+  return (k || "")
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 function resolveTopic(param: string) {
@@ -203,11 +215,39 @@ export default function TopicDetailPage({
   }, []);
 
   const subtopics = useMemo(() => {
-    // If your TopicCatalog already contains subtopics, wire it here.
-    // For now we infer from the topic key structure is unavailable.
-    // We'll populate this later from Firestore (distinct subTopic values for this topic).
-    return [] as string[];
-  }, []);
+    if (!topic) return [];
+
+    // 1) Prefer key-based lookup (canonical topic keys).
+    const key1 = normalizeTopicKey(topic.key);
+    const byKey = subtopicsForTopicKey(key1);
+    if (byKey.length > 0) return [...byKey];
+
+    // 2) Fall back to title-based lookup (handles catalog key mismatches).
+    const byTitle = subtopicsForTopicName(topic.title);
+    if (byTitle.length > 0) return [...byTitle];
+
+    // 3) Some catalogs prefix the title with the module name or similar.
+    const byModulePlusTitle = subtopicsForTopicName(`${topic.module} ${topic.title}`);
+    if (byModulePlusTitle.length > 0) return [...byModulePlusTitle];
+
+    return [];
+  }, [topic]);
+
+  // Keep selection sane when navigating between topics
+  useEffect(() => {
+    setSelectedSubtopics([]);
+  }, [topic?.key]);
+
+  useEffect(() => {
+    // Prune any selections that aren't valid for the current topic.
+    if (subtopics.length === 0) {
+      if (selectedSubtopics.length > 0) setSelectedSubtopics([]);
+      return;
+    }
+
+    setSelectedSubtopics((prev) => prev.filter((s) => subtopics.includes(s)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtopics]);
 
   // Load notes from Firestore: users/{uid}/notes/{topicKey}
   useEffect(() => {
@@ -434,9 +474,7 @@ export default function TopicDetailPage({
 
                 {subtopics.length === 0 ? (
                   <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/65">
-                    Subtopic filtering will appear here once we pull the list from
-                    Firestore (distinct <code className="px-1">subTopic</code> values
-                    for this topic).
+                    No subtopics are available for this topic yet.
                   </div>
                 ) : (
                   <div className="mt-3 flex flex-wrap gap-2">
