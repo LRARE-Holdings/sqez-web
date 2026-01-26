@@ -112,15 +112,41 @@ function tierLabel(raw?: string) {
 
 async function openBillingPortal(returnPath: string) {
   // This creates a Stripe Customer Portal session server-side.
-  // If you have a Stripe-hosted portal custom domain, Stripe will return a URL on that domain
-  // (e.g. https://pay.lrare.co.uk/p/...)
-  const res = await fetch("/api/stripe/portal", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ returnUrl: window.location.origin + returnPath }),
-  });
+  // Note: the *portal session* is created by YOUR Next.js API route.
+  // If that route is missing/misplaced you’ll get a 404 from your app (not from Stripe).
 
+  const returnUrl = window.location.origin + returnPath;
+
+  const u = auth.currentUser;
+  if (!u) throw new Error("Not signed in");
+
+  const token = await u.getIdToken();
+
+  // Some repos nest routes under `src/app/app/...` (so the API route becomes `/app/api/...`).
+  // Try the canonical `/api/...` first, then fall back to `/app/api/...` to avoid 404s.
+  const candidates = ["/api/stripe/portal", "/app/api/stripe/portal"];
+
+  let res: Response | null = null;
+  for (const url of candidates) {
+    // eslint-disable-next-line no-await-in-loop
+    const attempt = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ returnUrl }),
+    });
+
+    if (attempt.status !== 404) {
+      res = attempt;
+      break;
+    }
+  }
+
+  if (!res) throw new Error("Portal route not found (404)");
   if (!res.ok) throw new Error(`Portal request failed (${res.status})`);
+
   const data = (await res.json()) as { url?: string; error?: string };
   if (!data.url) throw new Error(data.error || "No portal url returned");
 
@@ -542,15 +568,6 @@ export default function AccountPage() {
                   {tierLabel(tier)}
                 </div>
               </div>
-
-              <button
-                type="button"
-                className="btn btn-primary px-4 py-2 !no-underline"
-                onClick={handleManageBilling}
-              >
-                Manage billing
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </button>
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -615,7 +632,7 @@ export default function AccountPage() {
                 className="btn btn-ghost w-full sm:w-auto !no-underline"
                 onClick={handleChangeBillingMethod}
               >
-                Change billing method
+                Manage billing
               </button>
             </div>
 

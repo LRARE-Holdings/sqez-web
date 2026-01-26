@@ -118,8 +118,17 @@ export default function CasesPage() {
 
   return (
     <div className="grid gap-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="text-2xl font-semibold tracking-tight text-white">Case library</div>
+          <div className="mt-1 text-sm text-white/70">
+            Find the cases that you need.
+          </div>
+        </div>
+      </div>
+
       <AppCard
-        title="Case library"
+        title="Cases"
         subtitle="Key cases, mapped to topics and subtopics. Use this to revise fast — then drill with sessions."
       >
         {/* Filters */}
