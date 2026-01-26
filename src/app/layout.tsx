@@ -4,9 +4,9 @@ import { Suspense } from "react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
-  title: "SQEz — daily SQE revision",
+  title: "SQEz - Master the SQE",
   description:
-    "Mobile-first, behaviour-driven SQE study: exam-standard MCQs, Autopsy Mode, confidence tracking, and habit-forming daily sessions.",
+    "SQEz is an SQE training platform, built for students, by students.",
   metadataBase: new URL("https://sqez.lrare.co.uk"),
 };
 
