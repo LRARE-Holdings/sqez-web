@@ -83,12 +83,14 @@ export async function sendFreeTrialEmail(params: {
   await resend.emails.send({
     from,
     to: params.customerEmail,
-    subject: "Your SQEz Pro free trial is active",
-    replyTo: "support@payments.lrare.co.uk",
-    html: freeTrialHtml({
-      firstName: params.firstName,
-      planLabel: params.planLabel,
-      trialEndsAt: params.trialEndsAt,
-    }),
+    replyTo: "support@lrare.co.uk",
+    template: {
+      id: "free-trial", // published Resend template alias
+      variables: {
+        FIRST_NAME: params.firstName ?? "",
+        PLAN_LABEL: params.planLabel,
+        TRIAL_ENDS_AT: params.trialEndsAt,
+      },
+    },
   });
 }
