@@ -79,7 +79,8 @@ export async function POST(req: Request) {
 
       metadata: { uid, plan },
 
-      allow_promotion_codes: false,
+      // ✅ Allow users to enter Stripe promo codes / coupons at checkout
+      allow_promotion_codes: true,
     });
 
     return NextResponse.json({ url: session.url });
