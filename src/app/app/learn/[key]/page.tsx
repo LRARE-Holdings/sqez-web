@@ -346,7 +346,7 @@ export default function TopicDetailPage({
             <span className="text-white/90">{rawKey || "(empty)"}</span>
           </div>
           <div className="mt-4">
-            <Link href="/app/learn" className="btn btn-primary !no-underline">
+            <Link href="/app/learn" className="btn btn-primary no-underline!">
               <ChevronLeft className="mr-2 h-4 w-4" />
               Back to Learn
             </Link>
@@ -371,7 +371,7 @@ export default function TopicDetailPage({
         </div>
 
         <div className="flex shrink-0 gap-2">
-          <Link href="/app/learn" className="btn btn-ghost !no-underline">
+          <Link href="/app/learn" className="btn btn-ghost no-underline!">
             <ChevronLeft className="mr-2 h-4 w-4" />
             Back
           </Link>
@@ -464,7 +464,7 @@ export default function TopicDetailPage({
                   {selectedSubtopics.length > 0 ? (
                     <button
                       type="button"
-                      className="btn btn-ghost px-3 py-2 !no-underline"
+                      className="btn btn-ghost px-3 py-2 no-underline!"
                       onClick={() => setSelectedSubtopics([])}
                     >
                       Clear
@@ -493,7 +493,7 @@ export default function TopicDetailPage({
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   type="button"
-                  className="btn btn-primary w-full sm:w-auto !no-underline"
+                  className="btn btn-primary w-full sm:w-auto no-underline!"
                   onClick={start}
                 >
                   <Zap className="mr-2 h-4 w-4" />
@@ -502,7 +502,7 @@ export default function TopicDetailPage({
 
                 <Link
                   href={`/app/revise?topic=${encodeURIComponent(topic.key)}`}
-                  className="btn btn-outline w-full sm:w-auto !no-underline"
+                  className="btn btn-outline w-full sm:w-auto no-underline!"
                 >
                   <Layers className="mr-2 h-4 w-4" />
                   Revise
@@ -577,7 +577,7 @@ export default function TopicDetailPage({
 
               <button
                 type="button"
-                className="btn btn-primary w-full sm:w-auto !no-underline"
+                className="btn btn-primary w-full sm:w-auto no-underline!"
                 onClick={saveNotes}
                 disabled={savingNotes}
               >

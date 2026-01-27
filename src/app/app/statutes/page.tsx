@@ -255,7 +255,7 @@ export default function StatutesPage() {
             {hasActiveFilters ? (
               <button
                 type="button"
-                className="btn btn-ghost px-3 py-2 !no-underline"
+                className="btn btn-ghost px-3 py-2 no-underline!"
                 onClick={() => {
                   setQuery("");
                   setTopicKey("ALL");
@@ -287,7 +287,7 @@ export default function StatutesPage() {
                   Try clearing filters, or search by name (e.g. “Land Registration Act”).
                 </div>
                 <div className="mt-3">
-                  <Link href="/app/learn" className="btn btn-outline !no-underline">
+                  <Link href="/app/learn" className="btn btn-outline no-underline!">
                     Browse topics
                     <ChevronRight className="ml-2 h-4 w-4" />
                   </Link>
@@ -333,7 +333,7 @@ export default function StatutesPage() {
                 <div className="shrink-0 flex flex-col gap-2 sm:items-end">
                   {s.url ? (
                     <a
-                      className="btn btn-outline w-full sm:w-auto !no-underline"
+                      className="btn btn-outline w-full sm:w-auto no-underline!"
                       href={s.url}
                       target="_blank"
                       rel="noreferrer"

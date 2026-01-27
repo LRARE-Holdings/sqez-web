@@ -58,7 +58,7 @@ export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
             <button
               type="button"
               onClick={onOpenNav}
-              className="btn btn-ghost px-3 py-2 md:!hidden"
+              className="btn btn-ghost px-3 py-2 md:hidden!"
               aria-label="Open navigation"
             >
               <Menu className="h-5 w-5" />
@@ -68,7 +68,7 @@ export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
           {/* Logo (mobile) */}
           <Link
             href="/app"
-            className="flex items-center gap-3 md:!hidden"
+            className="flex items-center gap-3 md:hidden!"
             aria-label="SQEz home"
           >
             <img src="/sqez-logo.svg" alt="SQEz" className="h-5 w-auto" />
@@ -76,7 +76,7 @@ export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
           </Link>
 
           {/* Greeting (desktop) */}
-          <div className="!hidden md:!block">
+          <div className="hidden! md:block!">
             <div className="text-sm font-medium text-white">
               {greeting}
             </div>

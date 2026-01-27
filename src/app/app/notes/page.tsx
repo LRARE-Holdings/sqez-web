@@ -175,7 +175,7 @@ export default function NotesIndexPage() {
     return (
       <div className="grid gap-6">
         <AppCard title="Notes" subtitle="Sign in to see your notes.">
-          <Link href="/auth?next=%2Fapp%2Fnotes" className="btn btn-primary !no-underline">
+          <Link href="/auth?next=%2Fapp%2Fnotes" className="btn btn-primary no-underline!">
             Sign in
             <ChevronRight className="ml-2 h-4 w-4" />
           </Link>
@@ -255,7 +255,7 @@ export default function NotesIndexPage() {
             {q.trim().length > 0 ? (
               <button
                 type="button"
-                className="btn btn-ghost px-3 py-2 !no-underline"
+                className="btn btn-ghost px-3 py-2 no-underline!"
                 onClick={() => setQ("")}
               >
                 <X className="mr-2 h-4 w-4" />
@@ -296,7 +296,7 @@ export default function NotesIndexPage() {
                 <div className="mt-3">
                   <button
                     type="button"
-                    className="btn btn-outline !no-underline"
+                    className="btn btn-outline no-underline!"
                     onClick={() => setQ("")}
                   >
                     Clear search
@@ -311,7 +311,7 @@ export default function NotesIndexPage() {
             <Link
               key={`${n.topicKey}-${n.id}`}
               href={`/app/notes/${encodeURIComponent(n.topicKey)}`}
-              className="!no-underline"
+              className="no-underline!"
             >
               <AppCardSoft className="px-5 py-5 hover:bg-white/7 transition">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

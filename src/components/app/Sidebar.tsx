@@ -59,7 +59,7 @@ export function Sidebar({
             href="/app"
             aria-label="SQEz home"
             style={noUnderlineStyle}
-            className="flex items-center gap-3 !no-underline hover:!no-underline focus:!no-underline"
+            className="flex items-center gap-3 no-underline! hover:no-underline! focus:no-underline!"
           >
             <img src="/sqez-logo.svg" alt="SQEz" className="h-5 w-auto" />
             <span className="sr-only">SQEz</span>
@@ -106,7 +106,7 @@ export function Sidebar({
                     style={noUnderlineStyle}
                     className={[
                       "group flex items-center gap-4 rounded-xl px-3 py-3.5 transition",
-                      "!no-underline hover:!no-underline focus:!no-underline",
+                      "no-underline! hover:no-underline! focus:no-underline!",
                       active
                         ? "bg-white/10 text-white"
                         : "text-white/80 hover:bg-white/5 hover:text-white",

@@ -507,7 +507,7 @@ export default function RevisionBankPage() {
                     </div>
                   </div>
 
-                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[220px]">
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-55">
                     <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
                       <div className="flex items-center justify-between text-xs text-white/70">
                         <span>Attempts</span>

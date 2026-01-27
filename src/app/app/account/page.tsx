@@ -533,7 +533,7 @@ export default function AccountPage() {
 
               <Link
                 href={`/name?next=${encodeURIComponent("/app/account")}`}
-                className="btn btn-ghost px-3 py-2 !no-underline"
+                className="btn btn-ghost px-3 py-2 no-underline!"
               >
                 <PencilLine className="mr-2 h-4 w-4" />
                 Edit
@@ -568,7 +568,7 @@ export default function AccountPage() {
 
               <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
                 <div className="text-xs text-white/60">UID</div>
-                <div className="max-w-[180px] truncate text-xs text-white/80">
+                <div className="max-w-45 truncate text-xs text-white/80">
                   {authUser?.uid || "—"}
                 </div>
               </div>
@@ -577,14 +577,14 @@ export default function AccountPage() {
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"
-                className="btn btn-outline w-full sm:w-auto !no-underline"
+                className="btn btn-outline w-full sm:w-auto no-underline!"
                 onClick={handleSignOut}
               >
                 Sign out
               </button>
               <Link
                 href="/app"
-                className="btn btn-ghost w-full sm:w-auto !no-underline"
+                className="btn btn-ghost w-full sm:w-auto no-underline!"
               >
                 Back to dashboard
               </Link>
@@ -665,7 +665,7 @@ export default function AccountPage() {
               {!pro ? (
                 <Link
                   href="/app/upgrade"
-                  className="btn btn-outline w-full sm:w-auto !no-underline"
+                  className="btn btn-outline w-full sm:w-auto no-underline!"
                 >
                   Upgrade to Pro
                   <ExternalLink className="ml-2 h-4 w-4" />
@@ -674,7 +674,7 @@ export default function AccountPage() {
 
               <button
                 type="button"
-                className="btn btn-ghost w-full sm:w-auto !no-underline"
+                className="btn btn-ghost w-full sm:w-auto no-underline!"
                 onClick={handleChangeBillingMethod}
               >
                 Manage billing
@@ -715,7 +715,7 @@ export default function AccountPage() {
             <div className="mt-3 flex flex-col gap-2">
               <button
                 type="button"
-                className="btn btn-outline w-full !no-underline"
+                className="btn btn-outline w-full no-underline!"
                 onClick={handleUpdateEmail}
                 disabled={emailBusy !== null}
               >
@@ -726,7 +726,7 @@ export default function AccountPage() {
               {!emailVerified ? (
                 <button
                   type="button"
-                  className="btn btn-ghost w-full !no-underline"
+                  className="btn btn-ghost w-full no-underline!"
                   onClick={handleSendVerification}
                   disabled={emailBusy !== null}
                 >
@@ -737,7 +737,7 @@ export default function AccountPage() {
               {!emailVerified ? (
                 <Link
                   href={verifyEmailHref}
-                  className="btn btn-primary w-full !no-underline"
+                  className="btn btn-primary w-full no-underline!"
                 >
                   Verify now
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -762,7 +762,7 @@ export default function AccountPage() {
             </div>
 
             <div className="mt-4 flex flex-col gap-2">
-              <Link href={mfaHref} className="btn btn-primary w-full !no-underline">
+              <Link href={mfaHref} className="btn btn-primary w-full no-underline!">
                 Manage MFA
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
