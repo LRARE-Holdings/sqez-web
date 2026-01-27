@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import { Menu } from "lucide-react";
 
 import { auth, db } from "@/lib/firebase/client";
 
@@ -52,11 +53,22 @@ export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
       <div className="flex items-center justify-between gap-4 px-4 py-3">
         {/* Left */}
         <div className="flex items-center gap-3">
+          {/* ✅ Mobile hamburger */}
+          {onOpenNav ? (
+            <button
+              type="button"
+              onClick={onOpenNav}
+              className="btn btn-ghost px-3 py-2 md:!hidden"
+              aria-label="Open navigation"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          ) : null}
 
           {/* Logo (mobile) */}
           <Link
             href="/app"
-            className="flex items-center gap-3 lg:hidden"
+            className="flex items-center gap-3 md:!hidden"
             aria-label="SQEz home"
           >
             <img src="/sqez-logo.svg" alt="SQEz" className="h-5 w-auto" />
@@ -64,7 +76,7 @@ export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
           </Link>
 
           {/* Greeting (desktop) */}
-          <div className="hidden lg:block">
+          <div className="!hidden md:!block">
             <div className="text-sm font-medium text-white">
               {greeting}
             </div>

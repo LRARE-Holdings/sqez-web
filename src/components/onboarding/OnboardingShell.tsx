@@ -48,17 +48,39 @@ export function OnboardingShell({
 export function OptionButton({
   children,
   onClick,
+  selected,
+  className,
 }: {
   children: React.ReactNode;
   onClick: () => void;
+  selected?: boolean;
+  className?: string;
 }) {
   return (
     <button
       type="button"
-      className="w-full rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-left text-sm text-white/90 hover:bg-white/10 transition"
+      aria-pressed={Boolean(selected)}
+      className={[
+        "w-full rounded-2xl border px-5 py-4 text-left text-sm transition",
+        selected
+          ? "border-emerald-300/50 bg-emerald-200/10 ring-2 ring-emerald-300/30 text-white"
+          : "border-white/10 bg-white/5 text-white/90 hover:bg-white/10",
+        className ?? "",
+      ].join(" ")}
       onClick={onClick}
     >
-      {children}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">{children}</div>
+        <div
+          className={[
+            "h-4 w-4 shrink-0 rounded-full border transition",
+            selected
+              ? "border-emerald-200 bg-emerald-300/80"
+              : "border-white/20 bg-transparent",
+          ].join(" ")}
+          aria-hidden="true"
+        />
+      </div>
     </button>
   );
 }

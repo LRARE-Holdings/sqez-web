@@ -321,7 +321,7 @@ export default function PlanPage() {
         <div className="text-[11px] leading-relaxed text-white/50">
           You’ll be redirected to Stripe Checkout. If you return and still see this page,
           refresh once — entitlement can take a moment to confirm.{" "}
-          <Link href="/legal" className="underline underline-offset-2">
+          <Link href="https://lrare.co.uk/terms" className="underline underline-offset-2">
             Terms
           </Link>
           .

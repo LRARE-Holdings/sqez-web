@@ -20,12 +20,6 @@ function friendlyAuthError(e: any) {
   if (code === "auth/invalid-app-credential") {
     return [
       "We couldn’t start SMS verification.",
-      "This usually means Firebase Phone Auth isn’t fully enabled for this web app.",
-      "",
-      "Checklist:",
-      "• Firebase Console → Authentication → Sign-in method → enable Phone",
-      "• Firebase Console → Authentication → Settings → Authorised domains: add localhost + your domain",
-      "• Google Cloud Console → APIs & Services → Credentials → your Browser API key: ensure localhost + domain are allowed (or temporarily remove restrictions)",
     ].join("\n");
   }
   if (code === "auth/requires-recent-login") {

@@ -51,6 +51,11 @@ type UserDoc = {
   proUpdatedAt?: Timestamp;
   lastTransactionID?: string;
 
+  // ✅ Subscription status mirrors (optional, but you said they exist in Firestore)
+  subStatus?: string; // active, trialing, past_due, canceled, etc
+  trialEndsAt?: Timestamp;
+  cancelAtPeriodEnd?: boolean;
+
   mfaEnrolled?: boolean;
   onboardingCompleted?: boolean;
 
@@ -59,16 +64,21 @@ type UserDoc = {
   // Optional (future-proof fields if you add them later)
   billingProvider?: "stripe" | "apple" | "unknown";
   billingMethodPreview?: string; // "Visa •••• 4242"
-  currentPeriodEnd?: Timestamp; // if you choose to mirror from Stripe
+  currentPeriodEnd?: Timestamp; // when the current period ends (renewal date)
 };
 
 type SubscriptionDoc = {
   isPro?: boolean;
   tier?: string;
   billing?: string; // "stripe" etc
+
+  // ✅ Mirrors from Stripe subscription
+  status?: string; // active, trialing, etc
+  trialEndsAt?: Timestamp;
+  cancelAtPeriodEnd?: boolean;
+
   updatedAt?: Timestamp;
   currentPeriodEnd?: Timestamp;
-  paymentMethodPreview?: string;
 };
 
 function fmtTS(ts?: Timestamp) {
@@ -89,11 +99,6 @@ function fmtDate(ts?: Timestamp) {
   }
 }
 
-function firstNameOnly(u?: UserDoc | null) {
-  const f = typeof u?.firstName === "string" ? u.firstName.trim() : "";
-  return f || "—";
-}
-
 function fullName(u?: UserDoc | null) {
   const f = typeof u?.firstName === "string" ? u.firstName.trim() : "";
   const l = typeof u?.lastName === "string" ? u.lastName.trim() : "";
@@ -110,20 +115,27 @@ function tierLabel(raw?: string) {
   return raw || "—";
 }
 
-async function openBillingPortal(returnPath: string) {
-  // This creates a Stripe Customer Portal session server-side.
-  // Note: the *portal session* is created by YOUR Next.js API route.
-  // If that route is missing/misplaced you’ll get a 404 from your app (not from Stripe).
+function subStatusLabel(raw?: string) {
+  const v = String(raw || "").trim().toLowerCase();
+  if (!v) return "—";
+  if (v === "trialing") return "Trial";
+  if (v === "active") return "Active";
+  if (v === "past_due") return "Past due";
+  if (v === "unpaid") return "Unpaid";
+  if (v === "incomplete") return "Incomplete";
+  if (v === "incomplete_expired") return "Incomplete (expired)";
+  if (v === "canceled" || v === "cancelled") return "Canceled";
+  if (v === "paused") return "Paused";
+  return raw || "—";
+}
 
+async function openBillingPortal(returnPath: string) {
   const returnUrl = window.location.origin + returnPath;
 
   const u = auth.currentUser;
   if (!u) throw new Error("Not signed in");
 
   const token = await u.getIdToken();
-
-  // Some repos nest routes under `src/app/app/...` (so the API route becomes `/app/api/...`).
-  // Try the canonical `/api/...` first, then fall back to `/app/api/...` to avoid 404s.
   const candidates = ["/api/stripe/portal", "/app/api/stripe/portal"];
 
   let res: Response | null = null;
@@ -150,7 +162,6 @@ async function openBillingPortal(returnPath: string) {
   const data = (await res.json()) as { url?: string; error?: string };
   if (!data.url) throw new Error(data.error || "No portal url returned");
 
-  // Stripe returns the fully-qualified portal session URL (often on your portal custom domain).
   window.location.assign(data.url);
 }
 
@@ -207,9 +218,11 @@ export default function AccountPage() {
   const [emailDraft, setEmailDraft] = useState("");
   const [emailBusy, setEmailBusy] = useState<null | "update" | "verify">(null);
 
-  // “Links” to your flows (these pages already exist in your project)
   const mfaHref = useMemo(() => `/mfa/enroll?next=${nextUrl}`, [nextUrl]);
-  const verifyEmailHref = useMemo(() => `/verify-email?next=${nextUrl}`, [nextUrl]);
+  const verifyEmailHref = useMemo(
+    () => `/verify-email?next=${nextUrl}`,
+    [nextUrl],
+  );
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -252,7 +265,9 @@ export default function AccountPage() {
     const unsubSub = onSnapshot(
       subRef,
       (snap) => {
-        setSubDoc((snap.data() as DocumentData | undefined) as SubscriptionDoc | null);
+        setSubDoc(
+          (snap.data() as DocumentData | undefined) as SubscriptionDoc | null,
+        );
       },
       () => setSubDoc(null),
     );
@@ -281,19 +296,35 @@ export default function AccountPage() {
     const fromUser = String(userDoc?.billingProvider || "").toLowerCase();
     const fromTier = String(tier || "").toLowerCase();
 
-    if (fromSub.includes("stripe") || fromUser === "stripe" || fromTier.includes("web"))
+    if (
+      fromSub.includes("stripe") ||
+      fromUser === "stripe" ||
+      fromTier.includes("web")
+    )
       return "Stripe (pay.lrare.co.uk)";
-    if (fromSub.includes("apple") || fromUser === "apple" || fromTier.includes("apple"))
+    if (
+      fromSub.includes("apple") ||
+      fromUser === "apple" ||
+      fromTier.includes("apple")
+    )
       return "Apple (iOS)";
     if (!fromSub && !fromUser) return "—";
     return "Unknown";
   }, [subDoc, userDoc, tier]);
 
-  const paymentMethodPreview =
-    subDoc?.paymentMethodPreview || userDoc?.billingMethodPreview || "—";
+
+  const subStatus = useMemo(() => {
+    const s = String(subDoc?.status || userDoc?.subStatus || "").trim();
+    if (s) return s;
+    return pro ? "active" : "";
+  }, [subDoc, userDoc, pro]);
+
+  const trialEndsAt = subDoc?.trialEndsAt || userDoc?.trialEndsAt || undefined;
 
   const periodEnd =
     subDoc?.currentPeriodEnd || userDoc?.currentPeriodEnd || undefined;
+
+  const renewalDate = periodEnd;
 
   const emailVerified = Boolean(authUser?.emailVerified);
   const mfaEnrolled = Boolean(userDoc?.mfaEnrolled);
@@ -315,12 +346,12 @@ export default function AccountPage() {
   async function handleManageBilling() {
     setBanner(null);
 
-    // If the user is billed via Apple, Stripe portal won't help.
     if (billingProvider === "Apple (iOS)") {
       setBanner({
         tone: "warn",
         title: "Managed on iOS",
-        message: "Your subscription is billed via Apple. Manage it in the App Store (Subscriptions).",
+        message:
+          "Your subscription is billed via Apple. Manage it in the App Store (Subscriptions).",
       });
       return;
     }
@@ -329,14 +360,11 @@ export default function AccountPage() {
       await openBillingPortal("/app/account");
     } catch (e) {
       console.error(e);
-      // Fallback: send them to pricing/upgrade page if portal is unavailable
       router.push("/app/upgrade");
     }
   }
 
   async function handleChangeBillingMethod() {
-    // In reality, “change billing method” is “manage subscription” in Stripe.
-    // If you want to *switch provider* (Stripe ↔ Apple), that’s a separate product decision.
     await handleManageBilling();
   }
 
@@ -360,7 +388,6 @@ export default function AccountPage() {
     try {
       await updateEmail(u, nextEmail);
 
-      // Mirror into Firestore (single source of truth for profile)
       await setDoc(
         doc(db, "users", u.uid),
         { email: nextEmail, updatedAt: serverTimestamp() },
@@ -425,19 +452,31 @@ export default function AccountPage() {
 
   const onboardingSummary = useMemo(() => {
     const o = (userDoc?.onboarding || {}) as Record<string, unknown>;
+
+    const stageRaw = o.stage ?? o.currentStage ?? o.persona;
+    const fundingRaw = o.funding ?? o.fundedBy;
+    const universityRaw = o.university;
+    const hrsRaw = o.hoursPerWeek ?? o.timeCommitment ?? o.hours;
+
+    const stage = typeof stageRaw === "string" ? stageRaw.trim() : "";
+    const funding = typeof fundingRaw === "string" ? fundingRaw.trim() : "";
+    const university =
+      typeof universityRaw === "string" ? universityRaw.trim() : "";
+
     const exam = o.targetExamDate;
-    const stage = o.stage || o.persona || o.currentStage;
-    const hrs = o.hoursPerWeek || o.timeCommitment || o.hours;
-    const funding = o.funding || o.fundedBy;
+    const examDate =
+      (exam as any)?.toDate?.()
+        ? (exam as any).toDate().toLocaleDateString()
+        : "—";
+
+    const hours = typeof hrsRaw === "number" ? `${hrsRaw} / week` : "—";
 
     return {
-      stage: typeof stage === "string" ? stage : "—",
-      hours: typeof hrs === "number" ? `${hrs} / week` : "—",
-      funding: typeof funding === "string" ? funding : "—",
-      examDate:
-        (exam as any)?.toDate?.()
-          ? (exam as any).toDate().toLocaleDateString()
-          : "—",
+      stage: stage || "—",
+      university: university || "—",
+      hours,
+      funding: funding || "—",
+      examDate,
     };
   }, [userDoc]);
 
@@ -562,11 +601,9 @@ export default function AccountPage() {
                   Subscription
                 </div>
                 <div className="mt-2 text-lg font-semibold text-white">
-                  {pro ? "Active" : "Not active"}
+                  {pro ? subStatusLabel(subStatus) : "Not active"}
                 </div>
-                <div className="mt-1 text-sm text-white/65">
-                  {tierLabel(tier)}
-                </div>
+                <div className="mt-1 text-sm text-white/65">{tierLabel(tier)}</div>
               </div>
             </div>
 
@@ -586,22 +623,24 @@ export default function AccountPage() {
               </AppCardSoft>
 
               <AppCardSoft className="px-5 py-4">
-                <div className="text-xs text-white/60">Payment method</div>
+                <div className="text-xs text-white/60">Subscription status</div>
                 <div className="mt-2 text-sm font-semibold text-white">
-                  {paymentMethodPreview}
+                  {pro ? subStatusLabel(subStatus) : "—"}
                 </div>
                 <div className="mt-2 text-xs text-white/60">
-                  Preview only (no sensitive card data stored).
+                  {subStatus?.toLowerCase() === "trialing" && trialEndsAt
+                    ? `Trial ends ${fmtDate(trialEndsAt)}.`
+                    : ""}
                 </div>
               </AppCardSoft>
 
               <AppCardSoft className="px-5 py-4">
-                <div className="text-xs text-white/60">Renews / ends</div>
+                <div className="text-xs text-white/60">Renews on</div>
                 <div className="mt-2 text-sm font-semibold text-white">
-                  {fmtDate(periodEnd)}
+                  {fmtDate(renewalDate)}
                 </div>
                 <div className="mt-2 text-xs text-white/60">
-                  This shows when the current period ends.
+                  Based on the subscription period end mirrored into Firestore.
                 </div>
               </AppCardSoft>
 
@@ -637,7 +676,9 @@ export default function AccountPage() {
             </div>
 
             <div className="mt-3 text-xs text-white/55">
-              Manage billing opens the Stripe customer portal (hosted at pay.lrare.co.uk) when available. If it can’t be opened, you’ll be routed to the upgrade page.
+              Manage billing opens the Stripe customer portal (hosted at
+              pay.lrare.co.uk) when available. If it can’t be opened, you’ll be
+              routed to the upgrade page.
             </div>
           </div>
         </div>
@@ -675,14 +716,17 @@ export default function AccountPage() {
                 {emailBusy === "update" ? "Updating…" : "Update email"}
               </button>
 
-              <button
-                type="button"
-                className="btn btn-ghost w-full !no-underline"
-                onClick={handleSendVerification}
-                disabled={emailBusy !== null}
-              >
-                {emailBusy === "verify" ? "Sending…" : "Send verification email"}
-              </button>
+              {/* ✅ Hide resend button if already verified */}
+              {!emailVerified ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost w-full !no-underline"
+                  onClick={handleSendVerification}
+                  disabled={emailBusy !== null}
+                >
+                  {emailBusy === "verify" ? "Sending…" : "Send verification email"}
+                </button>
+              ) : null}
 
               {!emailVerified ? (
                 <Link
@@ -693,14 +737,13 @@ export default function AccountPage() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               ) : (
-                <div className="text-xs text-white/55">
-                  Verified. You’re good.
-                </div>
+                <div className="text-xs text-white/55">Verified. You’re good.</div>
               )}
             </div>
 
             <div className="mt-3 text-xs text-white/55">
-              If Firebase asks for a recent login, sign out then sign back in and retry.
+              If Firebase asks for a recent login, sign out then sign back in and
+              retry.
             </div>
           </div>
 
@@ -724,7 +767,8 @@ export default function AccountPage() {
               </Link>
 
               <div className="text-xs text-white/55">
-                MFA is optional on web right now. You can add it for extra security.
+                MFA is optional on web right now. You can add it for extra
+                security.
               </div>
             </div>
           </div>
@@ -745,108 +789,13 @@ export default function AccountPage() {
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-white/60">Pro</span>
-                <span className="font-medium text-white/90">
-                  {pro ? "Yes" : "No"}
-                </span>
+                <span className="font-medium text-white/90">{pro ? "Yes" : "No"}</span>
               </div>
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-white/60">Updated</span>
                 <span>{fmtTS(userDoc?.updatedAt)}</span>
               </div>
-            </div>
-          </div>
-        </div>
-      </AppCard>
-
-      {/* Onboarding */}
-      <AppCard
-        title="Onboarding"
-        subtitle="Update your study setup anytime."
-        right={
-          <Link
-            href="/onboarding/stage?mode=edit"
-            className="btn btn-outline px-3 py-2 !no-underline"
-          >
-            Edit onboarding
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        }
-      >
-        <div className="grid gap-3 lg:grid-cols-3">
-          <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5">
-            <div className="text-xs text-white/60">Stage</div>
-            <div className="mt-2 text-sm font-semibold text-white">
-              {onboardingSummary.stage}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5">
-            <div className="text-xs text-white/60">Time</div>
-            <div className="mt-2 text-sm font-semibold text-white">
-              {onboardingSummary.hours}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5">
-            <div className="text-xs text-white/60">Target exam date</div>
-            <div className="mt-2 text-sm font-semibold text-white">
-              {onboardingSummary.examDate}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5 lg:col-span-3">
-            <div className="text-xs text-white/60">Funding</div>
-            <div className="mt-2 text-sm font-semibold text-white">
-              {onboardingSummary.funding}
-            </div>
-            <div className="mt-2 text-xs text-white/55">
-              Edit onboarding if your circumstances change.
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 rounded-3xl border border-white/10 bg-white/5 px-5 py-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-white">
-            <BookOpen className="h-4 w-4 text-white/70" />
-            Raw onboarding map (debug)
-          </div>
-          <pre className="mt-3 max-h-[240px] overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-white/75">
-            {JSON.stringify(userDoc?.onboarding ?? {}, null, 2)}
-          </pre>
-        </div>
-      </AppCard>
-
-      {/* Metadata */}
-      <AppCard title="Account details" subtitle="Stored in Firestore at users/{uid}.">
-        <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5 text-sm text-white/80">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-white/60">Created</span>
-              <span>{fmtTS(userDoc?.createdAt)}</span>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <span className="text-white/60">Updated</span>
-              <span>{fmtTS(userDoc?.updatedAt)}</span>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <span className="text-white/60">Pro updated</span>
-              <span>{fmtTS(userDoc?.proUpdatedAt)}</span>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5 text-sm text-white/80">
-            <div className="text-xs text-white/60">Plan + provider</div>
-            <div className="mt-2 text-sm font-semibold text-white">
-              {tierLabel(tier)}
-            </div>
-            <div className="mt-1 text-sm text-white/70">{billingProvider}</div>
-
-            <div className="mt-4 text-xs text-white/55">
-              If you want “runs out” / “renews” to be accurate, mirror the Stripe
-              subscription’s <code className="px-1">current_period_end</code> into
-              Firestore (users/{`{uid}`}/subscription/current). This page will display it
-              automatically.
             </div>
           </div>
         </div>

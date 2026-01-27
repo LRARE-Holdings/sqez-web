@@ -85,20 +85,60 @@ export default function BackgroundPage() {
         <div>
           <div className="text-xs text-white/60">Where are you based right now?</div>
           <div className="mt-3 grid gap-3">
-            <OptionButton onClick={() => pickLocation("UK")}>United Kingdom</OptionButton>
-            <OptionButton onClick={() => pickLocation("EU")}>European Union</OptionButton>
-            <OptionButton onClick={() => pickLocation("INTL")}>International</OptionButton>
-            <OptionButton onClick={() => pickLocation("DECLINED")}>Prefer not to say</OptionButton>
+            <OptionButton
+              onClick={() => pickLocation("UK")}
+              selected={answers.location === "UK"}
+            >
+              United Kingdom
+            </OptionButton>
+            <OptionButton
+              onClick={() => pickLocation("EU")}
+              selected={answers.location === "EU"}
+            >
+              European Union
+            </OptionButton>
+            <OptionButton
+              onClick={() => pickLocation("INTL")}
+              selected={answers.location === "INTL"}
+            >
+              International
+            </OptionButton>
+            <OptionButton
+              onClick={() => pickLocation("DECLINED")}
+              selected={answers.location === "DECLINED"}
+            >
+              Prefer not to say
+            </OptionButton>
           </div>
         </div>
 
         <div>
           <div className="text-xs text-white/60">Have you previously studied law at university level?</div>
           <div className="mt-3 grid gap-3">
-            <OptionButton onClick={() => pickLegal("LAW")}>Yes — law degree</OptionButton>
-            <OptionButton onClick={() => pickLegal("NON_LAW")}>Yes — non-law degree</OptionButton>
-            <OptionButton onClick={() => pickLegal("CAREER_CHANGE")}>No — career changer</OptionButton>
-            <OptionButton onClick={() => pickLegal("DECLINED")}>Prefer not to say</OptionButton>
+            <OptionButton
+              onClick={() => pickLegal("LAW")}
+              selected={answers.legalBackground === "LAW"}
+            >
+              Yes — law degree
+            </OptionButton>
+            <OptionButton
+              onClick={() => pickLegal("NON_LAW")}
+              selected={answers.legalBackground === "NON_LAW"}
+            >
+              Yes — non-law degree
+            </OptionButton>
+            <OptionButton
+              onClick={() => pickLegal("CAREER_CHANGE")}
+              selected={answers.legalBackground === "CAREER_CHANGE"}
+            >
+              No — career changer
+            </OptionButton>
+            <OptionButton
+              onClick={() => pickLegal("DECLINED")}
+              selected={answers.legalBackground === "DECLINED"}
+            >
+              Prefer not to say
+            </OptionButton>
           </div>
         </div>
 
