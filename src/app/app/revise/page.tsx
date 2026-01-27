@@ -277,103 +277,24 @@ export default function RevisePage() {
 
   const focusInfo = focusMeta(focus);
 
-  // ---------- Render states ----------
-  if (!authReady) {
-    return (
-      <div className="grid gap-6">
-        <div className="card">
-          <div className="text-sm font-semibold text-white">
-            Preparing revision…
-          </div>
-          <div className="mt-2 text-sm text-white/70">Checking sign-in.</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!authUser) {
-    return (
-      <div className="grid gap-6">
-        <div className="card">
-          <div className="text-sm font-semibold text-white">Sign in required</div>
-          <div className="mt-2 text-sm text-white/70">
-            You need to sign in before you can revise.
-          </div>
-          <div className="mt-5">
-            <Link href="/auth" className="btn btn-primary w-full sm:w-auto">
-              Go to sign in
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // ---------- Main UI ----------
   return (
     <div className="grid gap-6">
-      {/* Paywall sheet (simple web equivalent) */}
-      {showPaywall ? (
-        <div className="card border border-white/10">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-sm font-semibold text-white">
-                Unlock revision with SQEz Pro
-              </div>
-              <div className="mt-2 text-sm text-white/70">
-                Revision sessions are Pro — they’re built from your personal bank
-                of weak, low-confidence, and flagged questions.
-              </div>
-            </div>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => setShowPaywall(false)}
-            >
-              Close
-            </button>
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div className="min-w-0">
+    <div className="text-2xl font-semibold tracking-tight text-white">
+      Revise
+    </div>
+    <div className="mt-1 text-sm text-white/70">
+      Focus your revision and drill what matters.
+    </div>
+  </div>
+</div>
 
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-            <Link href="/app/onboarding/plan" className="btn btn-primary w-full sm:w-auto">
-              View plans
-            </Link>
-            <button
-              type="button"
-              className="btn btn-outline w-full sm:w-auto"
-              onClick={() => setShowPaywall(false)}
-            >
-              Not now
-            </button>
-          </div>
-        </div>
-      ) : null}
 
-      {/* Hero */}
-      <div className="card overflow-hidden">
-        <div className="relative">
-          <div className="absolute inset-0 opacity-90" />
-          <div
-            className={[
-              "rounded-3xl border border-white/10",
-              "bg-gradient-to-br from-white/15 via-white/5 to-transparent",
-              "px-5 py-6",
-            ].join(" ")}
-          >
-            <div className="text-sm font-semibold text-white">
-              Revise smarter, {greetingName}.
-            </div>
-            <div className="mt-2 text-sm text-white/70">
-              Build targeted sessions from the questions that matter most.
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="chip">Personalised</span>
-              <span className="chip">Weakness-led</span>
-              <span className="chip">Built from your bank</span>
-            </div>
-          </div>
-        </div>
-      </div>
+
+      
 
       {/* Focus picker */}
       <div className="card">

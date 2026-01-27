@@ -207,6 +207,11 @@ export async function POST(req: Request) {
     const entitled = stripeStatus ? isEntitledStripeStatus(stripeStatus) : false;
 
     const trialEndsAt = sub ? toDateFromUnixSeconds(sub.trial_end) : null;
+
+    // Stripe typings can lag behind API versions; access via `any` to avoid TS breakage.
+    const currentPeriodEnd = sub ? Number((sub as any).current_period_end) : null;
+    const renewsAt = currentPeriodEnd ? toDateFromUnixSeconds(currentPeriodEnd) : null;
+
     const computedSubStatus = sub
       ? subStatusForStripeSubscription(sub)
       : entitled
@@ -260,9 +265,16 @@ export async function POST(req: Request) {
       update.subscriptionTier = entitled ? tier : "free";
       update.subStatus = entitled ? computedSubStatus : "ended";
       if (entitled) update.proUpdatedAt = new Date();
+
+      // If entitlement is lost, clear renewal date (even if we couldn't retrieve the subscription).
+      if (!entitled) update.renewsAt = null;
     }
 
     if (sub) {
+      // Persist the renewal/current period end date for account UI.
+      // Note: `renewsAt` is derived from `current_period_end` above.
+      update.renewsAt = renewsAt ?? null;
+
       if (trialEndsAt) {
         update.trialEndsAt = trialEndsAt;
       } else if (sub.status !== "trialing") {

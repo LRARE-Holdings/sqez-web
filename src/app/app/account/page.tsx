@@ -92,7 +92,14 @@ function fmtTS(ts?: Timestamp) {
 function fmtDate(ts?: Timestamp) {
   if (!ts) return "—";
   try {
-    return ts.toDate().toLocaleDateString();
+    // en-GB: 27 Jan 2026
+    return ts
+      .toDate()
+      .toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
   } catch {
     return "—";
   }
@@ -117,15 +124,22 @@ function tierLabel(raw?: string) {
 function subStatusLabel(raw?: string) {
   const v = String(raw || "").trim().toLowerCase();
   if (!v) return "—";
-  if (v === "trialing") return "Trial";
+
+  // Canonical app labels
+  if (v === "trial" || v === "trialing") return "Trial";
   if (v === "active") return "Active";
+  if (v === "ended") return "Ended";
+
+  // Stripe / subscription states
   if (v === "past_due") return "Past due";
   if (v === "unpaid") return "Unpaid";
   if (v === "incomplete") return "Incomplete";
   if (v === "incomplete_expired") return "Incomplete (expired)";
   if (v === "canceled" || v === "cancelled") return "Canceled";
   if (v === "paused") return "Paused";
-  return raw || "—";
+
+  // Default: Title Case + spaces
+  return v.replace(/(^\w)|(_\w)/g, (m) => m.replace("_", " ").toUpperCase());
 }
 
 async function openBillingPortal(returnPath: string) {
@@ -155,6 +169,28 @@ async function openBillingPortal(returnPath: string) {
   if (!data.url) throw new Error(data.error || "No portal url returned");
 
   window.location.assign(data.url);
+}
+
+type SubStatus = "trial" | "active" | "ended" | string;
+
+function formatSubStatus(s: SubStatus | null | undefined): string {
+  const v = String(s || "").trim().toLowerCase();
+  if (!v) return "—";
+
+  // Canonical labels you care about
+  if (v === "trial") return "Trial";
+  if (v === "active") return "Active";
+  if (v === "ended") return "Ended";
+
+  // Stripe-ish fallbacks (if you ever display stripeSubStatus)
+  if (v === "trialing") return "Trial";
+  if (v === "canceled" || v === "cancelled") return "Canceled";
+  if (v === "past_due") return "Past due";
+  if (v === "unpaid") return "Unpaid";
+  if (v === "incomplete") return "Incomplete";
+
+  // Default: Title Case the raw value
+  return v.replace(/(^\w)|(_\w)/g, (m) => m.replace("_", " ").toUpperCase());
 }
 
 function StatusPill({
@@ -591,9 +627,13 @@ export default function AccountPage() {
                   {pro ? subStatusLabel(subStatus) : "—"}
                 </div>
                 <div className="mt-2 text-xs text-white/60">
-                  {subStatus?.toLowerCase() === "trialing" && trialEndsAt
-                    ? `Trial ends ${fmtDate(trialEndsAt)}.`
-                    : ""}
+                  {(() => {
+                    const s = String(subStatus || "").toLowerCase();
+                    const isTrial = s === "trial" || s === "trialing";
+                    if (!isTrial) return "";
+                    if (!trialEndsAt) return "Trial active.";
+                    return `Trial ends ${fmtDate(trialEndsAt)}.`;
+                  })()}
                 </div>
               </AppCardSoft>
 
@@ -609,7 +649,7 @@ export default function AccountPage() {
                 <div className="mt-2 text-xs text-white/60">
                   {Boolean(subDoc?.cancelAtPeriodEnd || userDoc?.cancelAtPeriodEnd)
                     ? "Your subscription will end at the end of this period unless you renew."
-                    : "This is the next renewal date (mirrored into Firestore)."}
+                    : "You may currently be in a trial period."}
                 </div>
               </AppCardSoft>
 
@@ -617,9 +657,6 @@ export default function AccountPage() {
                 <div className="text-xs text-white/60">Last transaction</div>
                 <div className="mt-2 max-w-[320px] truncate text-sm font-semibold text-white">
                   {userDoc?.lastTransactionID || "—"}
-                </div>
-                <div className="mt-2 text-xs text-white/60">
-                  Stored for support + entitlement audits.
                 </div>
               </AppCardSoft>
             </div>
@@ -706,13 +743,8 @@ export default function AccountPage() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               ) : (
-                <div className="text-xs text-white/55">Verified. You’re good.</div>
+                <div className="flex items-center text-xs text-white/55">Verified. You’re good.</div>
               )}
-            </div>
-
-            <div className="mt-3 text-xs text-white/55">
-              If Firebase asks for a recent login, sign out then sign back in and
-              retry.
             </div>
           </div>
 
@@ -735,10 +767,6 @@ export default function AccountPage() {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
 
-              <div className="text-xs text-white/55">
-                MFA is optional on web right now. You can add it for extra
-                security.
-              </div>
             </div>
           </div>
 
