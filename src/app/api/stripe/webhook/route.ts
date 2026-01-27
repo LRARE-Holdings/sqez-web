@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { Resend } from "resend";
 import { adminDb } from "@/lib/firebase/admin";
+import { sendFreeTrialEmail } from "@/lib/email/resend";
 
 export const runtime = "nodejs";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2025-12-15.clover",
 });
-
-const resend = new Resend(process.env.RESEND_API_KEY as string);
 
 function formatDateForEmail(d: Date): string {
   try {
@@ -26,7 +24,11 @@ function formatDateForEmail(d: Date): string {
 async function resolveEmailForUser(params: {
   userData: any;
   stripeCustomerId?: string;
+  sessionEmail?: string;
 }): Promise<string | null> {
+  const fromSession = typeof params.sessionEmail === "string" ? params.sessionEmail.trim() : "";
+  if (fromSession) return fromSession;
+
   const fromUserDoc = typeof params.userData?.email === "string" ? params.userData.email.trim() : "";
   if (fromUserDoc) return fromUserDoc;
 
@@ -41,42 +43,6 @@ async function resolveEmailForUser(params: {
   } catch {
     return null;
   }
-}
-
-async function sendTrialStartedEmail(params: {
-  to: string;
-  firstName?: string | null;
-  planLabel: "Monthly" | "Annual";
-  trialEndsAt: Date;
-}) {
-  const from = process.env.RESEND_FROM as string | undefined;
-  if (!from) throw new Error("Missing RESEND_FROM env var");
-
-  const name = (params.firstName || "").trim();
-  const greeting = name ? `Hi ${name},` : "Hi,";
-  const end = formatDateForEmail(params.trialEndsAt);
-
-  const subject = `Your SQEz Pro free trial is live (${params.planLabel})`;
-
-  const text = [
-    greeting,
-    "",
-    `Your SQEz Pro ${params.planLabel} free trial has started — you now have full access on desktop.`,
-    `Trial ends on: ${end}.`,
-    "",
-    "You won’t be charged today. You can cancel any time before your trial ends from your billing portal.",
-    "",
-    "If you need help, reply to this email.",
-    "",
-    "— SQEz",
-  ].join("\n");
-
-  await resend.emails.send({
-    from,
-    to: params.to,
-    subject,
-    text,
-  });
 }
 
 type Plan = "MONTHLY" | "ANNUAL";
@@ -150,6 +116,15 @@ export async function POST(req: Request) {
     }
 
     const obj: any = event.data.object;
+
+    const sessionEmail: string | null =
+      event.type === "checkout.session.completed"
+        ? (typeof obj?.customer_details?.email === "string" && obj.customer_details.email.trim()
+            ? obj.customer_details.email.trim()
+            : typeof obj?.customer_email === "string" && obj.customer_email.trim()
+              ? obj.customer_email.trim()
+              : null)
+        : null;
 
     // 1) Try to resolve subscriptionId
     const subscriptionId: string | undefined =
@@ -290,32 +265,39 @@ export async function POST(req: Request) {
       computedSubStatus === "trial" &&
       subscriptionId &&
       trialEndsAt
-    ) {
+    ) { 
       const alreadySentFor = typeof userData?.trialStartEmailSentForSubId === "string" ? userData.trialStartEmailSentForSubId : "";
 
       if (alreadySentFor !== subscriptionId) {
         const to = await resolveEmailForUser({
           userData,
           stripeCustomerId: stripeCustomerId ?? undefined,
+          sessionEmail: sessionEmail ?? undefined,
         });
 
         if (to) {
+          const existingEmail =
+            typeof userData?.email === "string" ? userData.email.trim() : "";
+          if (!existingEmail && to.trim()) {
+            update.email = to.trim();
+          }
           const firstName = typeof userData?.firstName === "string" ? userData.firstName : null;
           const planLabel: "Monthly" | "Annual" = String(plan || "").trim().toUpperCase() === "ANNUAL" ? "Annual" : "Monthly";
 
           try {
-            await sendTrialStartedEmail({
-              to,
+            await sendFreeTrialEmail({
+              customerEmail: to,
               firstName,
               planLabel,
-              trialEndsAt,
+              trialEndsAt: formatDateForEmail(trialEndsAt),
             });
 
             update.trialStartEmailSentForSubId = subscriptionId;
             update.trialStartEmailSentAt = new Date();
           } catch (e) {
             // Don’t fail the webhook if email fails.
-            console.error("Resend trial-start email failed", e);
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error("Resend free-trial email failed", msg, e);
           }
         }
       }

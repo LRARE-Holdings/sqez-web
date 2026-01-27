@@ -68,11 +68,7 @@ async function ensureUserDoc(params: { uid: string; email: string | null }) {
         targetExamDate: null,
       },
 
-      // Billing / entitlement
-      isPro: false,
-      subscriptionTier: "free",
-      proUpdatedAt: serverTimestamp(),
-      lastTransactionID: "",
+      // Billing / entitlement is server-owned (e.g. Stripe/webhooks). Do not set client-side.
     });
     return;
   }
@@ -334,9 +330,6 @@ export default function AuthPage() {
             <div className="card">
               <div>
                 <h2 className="text-lg font-semibold tracking-tight text-white">Sign in</h2>
-                <p className="mt-2 text-sm text-white/75">
-                  Use Google/Apple or email + password. If your account has MFA enabled, we’ll prompt you next.
-                </p>
               </div>
 
               <div className="mt-5 grid gap-2">
@@ -404,7 +397,7 @@ export default function AuthPage() {
                   </div>
 
                   <div className="mt-2 flex items-center justify-between text-[11px] text-white/60">
-                    <span>Minimum 8 characters.</span>
+                    <span></span>
                     <button
                       type="button"
                       className="btn btn-ghost px-3 py-2"
