@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Suspense } from "react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   title: "SQEz - Master the SQE",
@@ -17,6 +18,8 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-dvh bg-zinc-950 text-zinc-50 antialiased">
         <Suspense fallback={null}>{children}</Suspense>
+        <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   );
