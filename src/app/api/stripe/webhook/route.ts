@@ -223,9 +223,23 @@ export async function POST(req: Request) {
       (typeof obj?.invoice === "string" && obj.invoice) ||
       event.id;
 
+    // Stripe returns `customer` as either a string id or an expanded object.
+    // Normalize to a string id for Firestore + portal lookups.
     const stripeCustomerId =
-      (typeof sub?.customer === "string" ? sub.customer : undefined) ||
-      (typeof obj?.customer === "string" ? obj.customer : undefined);
+      (typeof sub?.customer === "string"
+        ? sub.customer
+        : sub?.customer && typeof (sub.customer as any).id === "string"
+          ? String((sub.customer as any).id)
+          : undefined) ||
+      (typeof obj?.customer === "string"
+        ? obj.customer
+        : obj?.customer && typeof obj.customer.id === "string"
+          ? String(obj.customer.id)
+          : undefined) ||
+      // Checkout session sometimes exposes customer id here
+      (typeof obj?.customer_details?.customer === "string"
+        ? obj.customer_details.customer
+        : undefined);
 
     // 5) Write Firestore — single source of truth fields
     // - When entitled => isPro true

@@ -20,7 +20,6 @@ import {
 } from "firebase/firestore";
 import {
   BadgeCheck,
-  BookOpen,
   CreditCard,
   KeyRound,
   Mail,
@@ -130,34 +129,27 @@ function subStatusLabel(raw?: string) {
 }
 
 async function openBillingPortal(returnPath: string) {
-  const returnUrl = window.location.origin + returnPath;
-
   const u = auth.currentUser;
   if (!u) throw new Error("Not signed in");
 
   const token = await u.getIdToken();
-  const candidates = ["/api/stripe/portal", "/app/api/stripe/portal"];
 
-  let res: Response | null = null;
-  for (const url of candidates) {
-    // eslint-disable-next-line no-await-in-loop
-    const attempt = await fetch(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ returnUrl }),
-    });
+  // Some portal endpoints accept an optional returnUrl; others hardcode it.
+  // We send it, but the server can ignore it.
+  const returnUrl = window.location.origin + returnPath;
 
-    if (attempt.status !== 404) {
-      res = attempt;
-      break;
-    }
+  const res = await fetch("/api/stripe/portal", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ returnUrl }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Portal request failed (${res.status})`);
   }
-
-  if (!res) throw new Error("Portal route not found (404)");
-  if (!res.ok) throw new Error(`Portal request failed (${res.status})`);
 
   const data = (await res.json()) as { url?: string; error?: string };
   if (!data.url) throw new Error(data.error || "No portal url returned");
@@ -450,35 +442,6 @@ export default function AccountPage() {
     }
   }
 
-  const onboardingSummary = useMemo(() => {
-    const o = (userDoc?.onboarding || {}) as Record<string, unknown>;
-
-    const stageRaw = o.stage ?? o.currentStage ?? o.persona;
-    const fundingRaw = o.funding ?? o.fundedBy;
-    const universityRaw = o.university;
-    const hrsRaw = o.hoursPerWeek ?? o.timeCommitment ?? o.hours;
-
-    const stage = typeof stageRaw === "string" ? stageRaw.trim() : "";
-    const funding = typeof fundingRaw === "string" ? fundingRaw.trim() : "";
-    const university =
-      typeof universityRaw === "string" ? universityRaw.trim() : "";
-
-    const exam = o.targetExamDate;
-    const examDate =
-      (exam as any)?.toDate?.()
-        ? (exam as any).toDate().toLocaleDateString()
-        : "—";
-
-    const hours = typeof hrsRaw === "number" ? `${hrsRaw} / week` : "—";
-
-    return {
-      stage: stage || "—",
-      university: university || "—",
-      hours,
-      funding: funding || "—",
-      examDate,
-    };
-  }, [userDoc]);
 
   return (
     <div className="grid gap-6">
@@ -635,12 +598,18 @@ export default function AccountPage() {
               </AppCardSoft>
 
               <AppCardSoft className="px-5 py-4">
-                <div className="text-xs text-white/60">Renews on</div>
+                <div className="text-xs text-white/60">
+                  {Boolean(subDoc?.cancelAtPeriodEnd || userDoc?.cancelAtPeriodEnd)
+                    ? "Ends on"
+                    : "Renews on"}
+                </div>
                 <div className="mt-2 text-sm font-semibold text-white">
                   {fmtDate(renewalDate)}
                 </div>
                 <div className="mt-2 text-xs text-white/60">
-                  Based on the subscription period end mirrored into Firestore.
+                  {Boolean(subDoc?.cancelAtPeriodEnd || userDoc?.cancelAtPeriodEnd)
+                    ? "Your subscription will end at the end of this period unless you renew."
+                    : "This is the next renewal date (mirrored into Firestore)."}
                 </div>
               </AppCardSoft>
 
