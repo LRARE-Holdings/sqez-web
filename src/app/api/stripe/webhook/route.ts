@@ -9,6 +9,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2025-12-15.clover",
 });
 
+console.log("✅ webhook hit", new Date().toISOString());
+
 function formatDateForEmail(d: Date): string {
   try {
     return new Intl.DateTimeFormat("en-GB", {
