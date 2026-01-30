@@ -20,4 +20,14 @@ if (typeof window !== "undefined") {
   console.log("[firebase] origin:", window.location.origin);
   console.log("[firebase] authDomain:", auth.config.authDomain);
   console.log("[firebase] projectId:", auth.app.options.projectId);
+  // Expose a minimal debug handle for console inspection.
+  (window as any).__sqezFirebaseDebug = {
+    app,
+    auth,
+    config: {
+      apiKey: auth.app.options.apiKey,
+      authDomain: auth.config.authDomain,
+      projectId: auth.app.options.projectId,
+    },
+  };
 }

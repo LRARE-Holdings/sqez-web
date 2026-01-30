@@ -282,26 +282,26 @@ export default function AuthPage() {
       {/* Background */}
       <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
         <div className="absolute inset-0" style={{ backgroundColor: "#0a1a2f" }} />
-        <div className="absolute -top-24 left-1/2 h-64 w-[52rem] -translate-x-1/2 rounded-full bg-white/5 blur-3xl" />
-        <div className="absolute top-56 left-1/2 h-64 w-[52rem] -translate-x-1/2 rounded-full bg-white/4 blur-3xl" />
+        <div className="absolute -top-24 left-1/2 h-64 w-208 -translate-x-1/2 rounded-full bg-white/5 blur-3xl" />
+        <div className="absolute top-56 left-1/2 h-64 w-208 -translate-x-1/2 rounded-full bg-white/4 blur-3xl" />
       </div>
 
       {/* Top bar */}
       <header className="sticky top-0 z-20 border-b border-white/10 bg-[#0a1a2f]/75 backdrop-blur">
         <div className="container-sqez flex items-center justify-between px-4 py-3">
-          <Link href="/" className="flex items-center gap-3 !no-underline" aria-label="SQEz home">
+          <Link href="/" className="flex items-center gap-3 no-underline!" aria-label="SQEz home">
             <img src="/sqez-logo.svg" alt="SQEz" className="h-5 w-auto" />
             <span className="sr-only">SQEz</span>
           </Link>
 
-          <Link className="btn btn-ghost px-3 py-2 !no-underline" href="/" aria-label="Back to home">
+          <Link className="btn btn-ghost px-3 py-2 no-underline!" href="/" aria-label="Back to home">
             Back
           </Link>
         </div>
       </header>
 
       <div className="container-sqez px-4 pb-14 pt-10">
-        <div className="mx-auto grid w-full max-w-[980px] gap-8 lg:grid-cols-2">
+        <div className="mx-auto grid w-full max-w-245 gap-8 lg:grid-cols-2">
           {/* Left */}
           <section className="hidden lg:block">
             <div className="chip">Sign in</div>
@@ -318,7 +318,7 @@ export default function AuthPage() {
                 Create an account to start onboarding and get your recommended plan.
               </div>
               <div className="mt-4">
-                <Link href={signupHref} className="btn btn-primary w-full sm:w-auto !no-underline">
+                <Link href={signupHref} className="btn btn-primary w-full sm:w-auto no-underline!">
                   Create account
                 </Link>
               </div>
@@ -427,11 +427,11 @@ export default function AuthPage() {
 
                 <div className="text-xs leading-relaxed text-white/70">
                   By continuing, you agree to our{" "}
-                  <Link href="/legal/terms" className="!no-underline hover:underline">
+                  <Link href="/legal/terms" className="no-underline! hover:underline">
                     Terms
                   </Link>{" "}
                   and{" "}
-                  <Link href="/legal/privacy" className="!no-underline hover:underline">
+                  <Link href="/legal/privacy" className="no-underline! hover:underline">
                     Privacy Policy
                   </Link>
                   .
@@ -439,7 +439,7 @@ export default function AuthPage() {
 
                 <div className="pt-2 text-xs text-white/70">
                   Don&apos;t have an account?{" "}
-                  <Link href={signupHref} className="font-medium text-white !no-underline hover:underline">
+                  <Link href={signupHref} className="font-medium text-white no-underline! hover:underline">
                     Create one
                   </Link>
                 </div>
