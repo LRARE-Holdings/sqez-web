@@ -135,7 +135,7 @@ function subStatusLabel(raw?: string) {
   if (v === "unpaid") return "Unpaid";
   if (v === "incomplete") return "Incomplete";
   if (v === "incomplete_expired") return "Incomplete (expired)";
-  if (v === "canceled" || v === "cancelled") return "Canceled";
+  if (v === "canceled" || v === "cancelled") return "Cancelled";
   if (v === "paused") return "Paused";
 
   // Default: Title Case + spaces
@@ -184,7 +184,7 @@ function formatSubStatus(s: SubStatus | null | undefined): string {
 
   // Stripe-ish fallbacks (if you ever display stripeSubStatus)
   if (v === "trialing") return "Trial";
-  if (v === "canceled" || v === "cancelled") return "Canceled";
+  if (v === "canceled" || v === "cancelled") return "Cancelled";
   if (v === "past_due") return "Past due";
   if (v === "unpaid") return "Unpaid";
   if (v === "incomplete") return "Incomplete";

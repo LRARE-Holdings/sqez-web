@@ -1,5 +1,7 @@
 "use client";
 
+import { casesForTopicKey } from "@/lib/catalog/cases";
+import { statutesForTopicKey } from "@/lib/catalog/statutes";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -9,6 +11,7 @@ import {
   Zap,
   Settings2,
   ChevronLeft,
+  ChevronRight,
   Check,
   FileText,
   Library,
@@ -18,8 +21,6 @@ import {
 import { AppCard, AppCardSoft } from "@/components/ui/AppCard";
 import { allTopics } from "@/lib/topicCatalog";
 import { subtopicsForTopicKey, subtopicsForTopicName } from "@/lib/catalog/subtopics";
-import { auth, db } from "@/lib/firebase/client";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 type Difficulty = "ALL" | "Easy" | "Medium" | "Hard";
 type Mode = "quickfire" | "revise";
@@ -86,6 +87,15 @@ function resolveTopic(param: string) {
       compact(tTitle).includes(compactDecodedLower)
     );
   });
+}
+
+function notesTopicIdFromTopicKey(topicKey: string) {
+  // business-law-and-practice -> BusinessLawAndPractice
+  return (topicKey || "")
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
 }
 
 /** Basic segmented control */
@@ -166,11 +176,6 @@ export default function TopicDetailPage({
   const [count, setCount] = useState<number>(10);
   const [difficulty, setDifficulty] = useState<Difficulty>("ALL");
   const [selectedSubtopics, setSelectedSubtopics] = useState<string[]>([]);
-  const [notes, setNotes] = useState("");
-  const [savingNotes, setSavingNotes] = useState(false);
-  const [notesStatus, setNotesStatus] = useState<"idle" | "saved" | "error">(
-    "idle",
-  );
 
   // Resolve params.key safely (Next 16 dynamic params are async)
   useEffect(() => {
@@ -249,68 +254,6 @@ export default function TopicDetailPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subtopics]);
 
-  // Load notes from Firestore: users/{uid}/notes/{topicKey}
-  useEffect(() => {
-    setNotesStatus("idle");
-    if (!topic) return;
-
-    const user = auth.currentUser;
-    if (!user) {
-      setNotes("");
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const ref = doc(db, "users", user.uid, "notes", topic.key);
-        const snap = await getDoc(ref);
-        if (cancelled) return;
-
-        const data = snap.exists() ? snap.data() : null;
-        setNotes((data?.notes as string) ?? "");
-      } catch {
-        if (!cancelled) setNotes("");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [topic]);
-
-  async function saveNotes() {
-    if (!topic) return;
-    const user = auth.currentUser;
-    if (!user) {
-      router.push(`/auth?next=${encodeURIComponent(`/app/learn/${topic.key}`)}`);
-      return;
-    }
-
-    setSavingNotes(true);
-    setNotesStatus("idle");
-
-    try {
-      const ref = doc(db, "users", user.uid, "notes", topic.key);
-      await setDoc(
-        ref,
-        {
-          topicKey: topic.key,
-          topicTitle: topic.title,
-          notes,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      setNotesStatus("saved");
-    } catch {
-      setNotesStatus("error");
-    } finally {
-      setSavingNotes(false);
-      window.setTimeout(() => setNotesStatus("idle"), 1800);
-    }
-  }
 
   function toggleSubtopic(s: string) {
     setSelectedSubtopics((prev) =>
@@ -511,82 +454,144 @@ export default function TopicDetailPage({
             </div>
           </div>
 
-          {/* Right: resources + key questions */}
+          {/* Right: resources */}
           <div className="lg:col-span-5">
             <div className="grid gap-3">
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                  <Library className="h-4 w-4 text-white/70" />
-                  Resources
-                </div>
-                <div className="mt-2 text-sm text-white/70">
-                  We’ll surface statutes, key cases, and links here per topic.
-                </div>
-                <div className="mt-3 text-xs text-white/55">
-                  Next step: wire this to your StatuteLibrary / CaseLibrary.
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                  <Star className="h-4 w-4 text-white/70" />
-                  Key questions
-                </div>
-                <div className="mt-2 text-sm text-white/70">
-                  A curated list of “must-know” questions will live here.
-                </div>
-                <div className="mt-3 text-xs text-white/55">
-                  Next step: add a Firestore collection for key questions by topic.
-                </div>
-              </div>
-            </div>
-          </div>
+{/* Right: resources */}
+<div className="lg:col-span-5">
+  <div className="grid gap-3">
+    {/* Statutes preview */}
+    <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-white">
+          <Library className="h-4 w-4 text-white/70" />
+          Statutes
         </div>
-      </AppCard>
 
-      {/* Notes */}
-      <AppCard
-        title="Notes"
-        subtitle="Private notes for this topic. Saved to your account."
-      >
-        <div className="grid gap-3">
-          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-white/60">
-              <FileText className="h-4 w-4 text-white/45" />
-              <span>Notes for {topic.title}</span>
+        <Link
+          className="btn btn-ghost px-3 py-2 no-underline!"
+          href={`/app/statutes?topic=${encodeURIComponent(topic.key)}`}
+        >
+          View all
+          <ChevronRight className="ml-2 h-4 w-4" />
+        </Link>
+      </div>
+
+      {(() => {
+        const list = statutesForTopicKey(topic.key).slice(0, 3);
+        if (list.length === 0) {
+          return (
+            <div className="mt-2 text-sm text-white/70">
+              No statutes mapped yet for this topic.
             </div>
+          );
+        }
 
-            <textarea
-              className="mt-3 w-full resize-y rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/90 outline-none placeholder:text-white/40 focus:border-white/25"
-              rows={8}
-              placeholder="Write anything you want to remember — checklists, definitions, weak points, examples…"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-xs text-white/60">
-                {notesStatus === "saved" ? (
-                  <span className="text-emerald-200/90">Saved</span>
-                ) : notesStatus === "error" ? (
-                  <span className="text-amber-200/90">Couldn’t save</span>
-                ) : (
-                  <span className="text-white/55">Autosave is optional — click save.</span>
-                )}
-              </div>
-
-              <button
-                type="button"
-                className="btn btn-primary w-full sm:w-auto no-underline!"
-                onClick={saveNotes}
-                disabled={savingNotes}
+        return (
+          <div className="mt-3 grid gap-2">
+            {list.map((s) => (
+              <div
+                key={s.id}
+                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
               >
-                {savingNotes ? "Saving…" : "Save notes"}
-              </button>
+                <div className="text-sm font-semibold text-white">
+                  {s.title}
+                  {s.year ? ` ${s.year}` : ""}
+                </div>
+                {s.short ? (
+                  <div className="mt-1 text-sm text-white/70">{s.short}</div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+    </div>
+
+    {/* Cases preview */}
+    <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-white">
+          <Star className="h-4 w-4 text-white/70" />
+          Cases
+        </div>
+
+        <Link
+          className="btn btn-ghost px-3 py-2 no-underline!"
+          href={`/app/cases?topic=${encodeURIComponent(topic.key)}`}
+        >
+          View all
+          <ChevronRight className="ml-2 h-4 w-4" />
+        </Link>
+      </div>
+
+      {(() => {
+        const list = casesForTopicKey(topic.key).slice(0, 3);
+        if (list.length === 0) {
+          return (
+            <div className="mt-2 text-sm text-white/70">
+              No cases mapped yet for this topic.
+            </div>
+          );
+        }
+
+        return (
+          <div className="mt-3 grid gap-2">
+            {list.map((c) => (
+              <div
+                key={c.id}
+                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+              >
+                <div className="text-sm font-semibold text-white">{c.name}</div>
+                <div className="mt-1 text-sm text-white/70">
+                  {c.citation ? (
+                    <span className="text-white/80">{c.citation}</span>
+                  ) : null}
+                  {c.year || c.court ? (
+                    <span className="text-white/50">
+                      {" "}
+                      • {[c.court, c.year].filter(Boolean).join(" ")}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-2 text-sm text-white/70">{c.summary}</div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+    </div>
+
+    {/* Notes shortcut */}
+    <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
+      <div className="flex items-center gap-2 text-sm font-semibold text-white">
+        <FileText className="h-4 w-4 text-white/70" />
+        Notes
+      </div>
+      <div className="mt-2 text-sm text-white/70">
+        Jump straight to your notes for this topic.
+      </div>
+
+      <div className="mt-3">
+        <Link
+          className="btn btn-outline w-full sm:w-auto no-underline!"
+          href={`/app/notes/${encodeURIComponent(
+            notesTopicIdFromTopicKey(topic.key),
+          )}`}
+        >
+          Open notes
+          <ChevronRight className="ml-2 h-4 w-4" />
+        </Link>
+      </div>
+    </div>
+  </div>
+</div>
+
             </div>
           </div>
         </div>
       </AppCard>
+
 
       <div className="text-xs text-white/55">
         Tip: Quickfire is best as your default. Use Revise when you want a tighter filter.
