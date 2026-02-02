@@ -4,10 +4,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
-import { needsMfaEnrollment } from "@/lib/auth/mfa";
 import { Sidebar } from "@/components/app/Sidebar";
 import { Topbar } from "@/components/app/Topbar";
-import { isPasswordUser } from "@/lib/auth/mfa";
 import { ProGate } from "@/components/app/ProGate";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -29,16 +27,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       if (!user) {
         router.replace(`/auth?next=${nextUrl}`);
-        return;
-      }
-
-      if (isPasswordUser(user) && !user.emailVerified) {
-        router.replace(`/verify-email?next=${nextUrl}`);
-        return;
-      }
-
-      if (needsMfaEnrollment(user)) {
-        router.replace(`/mfa/enroll?next=${nextUrl}`);
         return;
       }
 

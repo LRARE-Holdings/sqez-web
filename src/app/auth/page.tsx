@@ -12,7 +12,6 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
-import { needsMfaEnrollment } from "@/lib/auth/mfa";
 import { auth, db } from "@/lib/firebase/client";
 
 function isValidEmail(value: string) {
@@ -129,16 +128,6 @@ export default function AuthPage() {
     if (info) setInfo(null);
   }
 
-  function setBridgeForMfa(emailValue: string, pwValue: string, nextValue: string) {
-    // Bridge values are best-effort; if blocked/unavailable, MFA page should be tolerant.
-    try {
-      sessionStorage.setItem("sqez_mfa_email", emailValue);
-      sessionStorage.setItem("sqez_mfa_pw", pwValue);
-      sessionStorage.setItem("sqez_mfa_next", nextValue);
-    } catch {
-      // Ignore — challenge page must handle missing bridge gracefully.
-    }
-  }
 
   async function routeAfterAuth(provider: "password" | "provider") {
     const user = auth.currentUser;
@@ -152,12 +141,6 @@ export default function AuthPage() {
       await ensureUserDoc({ uid: user.uid, email: user.email });
     } catch (e) {
       console.error("⚠️ AUTH OK, FIRESTORE FAILED (ensureUserDoc)", e);
-    }
-
-    // Your existing logic: enforce MFA enrollment only for password users.
-    if (provider === "password" && needsMfaEnrollment(user)) {
-      router.push(`/mfa/enroll?next=${encodeURIComponent(nextPath)}`);
-      return;
     }
 
     router.push(nextPath);
@@ -186,10 +169,11 @@ export default function AuthPage() {
     } catch (err: any) {
       const code = String(err?.code ?? "");
 
-      // ✅ MFA-required flow: expected for MFA accounts — do NOT log as an error.
+      // MFA is no longer supported on web for SQEz.
       if (code === "auth/multi-factor-auth-required") {
-        setBridgeForMfa(safeEmail, safePw, nextPath);
-        router.push(`/mfa/challenge?next=${encodeURIComponent(nextPath)}`);
+        setError(
+          "This account has multi-factor authentication enabled, which SQEz web no longer supports. Please contact support to disable MFA on your account."
+        );
         return;
       }
 

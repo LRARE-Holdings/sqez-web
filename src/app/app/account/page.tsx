@@ -24,8 +24,6 @@ import {
   KeyRound,
   Mail,
   PencilLine,
-  Phone,
-  Shield,
   UserRound,
   Loader2,
   ArrowRight,
@@ -55,7 +53,6 @@ type UserDoc = {
   trialEndsAt?: Timestamp;
   cancelAtPeriodEnd?: boolean;
 
-  mfaEnrolled?: boolean;
   onboardingCompleted?: boolean;
 
   onboarding?: Record<string, unknown>;
@@ -246,7 +243,6 @@ export default function AccountPage() {
   const [emailDraft, setEmailDraft] = useState("");
   const [emailBusy, setEmailBusy] = useState<null | "update" | "verify">(null);
 
-  const mfaHref = useMemo(() => `/mfa/enroll?next=${nextUrl}`, [nextUrl]);
   const verifyEmailHref = useMemo(
     () => `/verify-email?next=${nextUrl}`,
     [nextUrl],
@@ -355,7 +351,6 @@ export default function AccountPage() {
   const renewalDate = periodEnd;
 
   const emailVerified = Boolean(authUser?.emailVerified);
-  const mfaEnrolled = Boolean(userDoc?.mfaEnrolled);
 
   async function handleSignOut() {
     setBanner(null);
@@ -556,15 +551,6 @@ export default function AccountPage() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                <div className="flex items-center gap-2 text-xs text-white/60">
-                  <Phone className="h-4 w-4 text-white/45" />
-                  MFA enabled
-                </div>
-                <span className="text-xs text-white/85">
-                  {mfaEnrolled ? "Yes" : "No"}
-                </span>
-              </div>
 
               <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
                 <div className="text-xs text-white/60">UID</div>
@@ -691,7 +677,7 @@ export default function AccountPage() {
       </AppCard>
 
       {/* Security */}
-      <AppCard title="Security" subtitle="Email verification and MFA status.">
+      <AppCard title="Security" subtitle="Email verification status">
         <div className="grid gap-3 lg:grid-cols-3">
           <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -748,27 +734,6 @@ export default function AccountPage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5">
-            <div className="flex items-center gap-2 text-sm font-semibold text-white">
-              <Shield className="h-4 w-4 text-white/70" />
-              MFA (SMS)
-            </div>
-
-            <div className="mt-2 text-sm text-white/70">
-              Status:{" "}
-              <span className="font-semibold text-white">
-                {mfaEnrolled ? "Enabled" : "Not enabled"}
-              </span>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-2">
-              <Link href={mfaHref} className="btn btn-primary w-full no-underline!">
-                Manage MFA
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-
-            </div>
-          </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-white">

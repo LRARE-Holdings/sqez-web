@@ -66,9 +66,6 @@ async function ensureUserDoc(params: { uid: string; email: string | null }) {
       fcmToken: "",
       fcmTokenUpdatedAt: serverTimestamp(),
 
-      // Security
-      mfaEnrolled: false,
-
       // Onboarding
       onboardingCompleted: false,
       onboarding: {
