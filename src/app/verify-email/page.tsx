@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { onAuthStateChanged, sendEmailVerification } from "firebase/auth";
 
 import { auth } from "@/lib/firebase/client";
-import { isPasswordUser } from "@/lib/auth/mfa";
 
 export default function VerifyEmailPage() {
   const router = useRouter();
@@ -52,12 +51,6 @@ export default function VerifyEmailPage() {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         router.replace(`/auth?next=${encodeURIComponent("/verify-email")}`);
-        return;
-      }
-
-      // Only enforce email verification for password users
-      if (!isPasswordUser(user)) {
-        router.replace(next);
         return;
       }
 
