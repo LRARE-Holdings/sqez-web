@@ -6,7 +6,6 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase/client";
-import { isPasswordUser } from "@/lib/auth/mfa";
 
 export default function OnboardingAuthGate({
   children,
@@ -34,20 +33,6 @@ export default function OnboardingAuthGate({
       if (!user) {
         router.replace(`/auth?next=${nextUrl}`);
         return;
-      }
-
-      // Password users must verify email BEFORE onboarding
-      if (isPasswordUser(user) && !user.emailVerified) {
-        try {
-          await user.reload();
-        } catch {
-          // ignore reload failures; we still check emailVerified as-is
-        }
-
-        if (!user.emailVerified) {
-          router.replace(`/verify-email?next=${nextUrl}`);
-          return;
-        }
       }
 
       // Phase 2: Names required before onboarding (single source of truth: Firestore)
