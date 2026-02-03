@@ -7,6 +7,7 @@
   - A small, consistent set of UI primitives (card, buttons, inputs)
 */
 
+@import "tippy.js/dist/tippy.css";
 @import "tailwindcss";
 @reference "tailwindcss/utilities";
 
