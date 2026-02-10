@@ -7,6 +7,7 @@ import { BookOpen, Search, Zap, Layers, Clock } from "lucide-react";
 import { AppCard } from "@/components/ui/AppCard";
 import { allTopics, type Topic } from "@/lib/topicCatalog";
 import { getItemMetas } from "@/lib/engineStore";
+import { canonicalTopicKey } from "@/lib/topicKeys";
 
 type ModuleFilter = "ALL" | "FLK1" | "FLK2";
 
@@ -58,22 +59,7 @@ function topicKeyForItem(item: { tags: string[] }): string | null {
   const topicTag = (item.tags?.[1] ?? "").trim();
   if (!topicTag) return null;
 
-  const lower = topicTag.toLowerCase();
-
-  const byTitle = allTopics.find((t) => t.title.toLowerCase() === lower);
-  if (byTitle) return byTitle.key;
-
-  const compact = lower.replace(/\s+/g, "");
-  const byKey = allTopics.find((t) => t.key.toLowerCase() === compact);
-  if (byKey) return byKey.key;
-
-  const loose = allTopics.find(
-    (t) =>
-      t.title.toLowerCase().includes(lower) ||
-      t.key.toLowerCase().includes(compact),
-  );
-
-  return loose?.key ?? null;
+  return canonicalTopicKey(topicTag);
 }
 
 function buildReadinessMap() {

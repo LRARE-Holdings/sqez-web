@@ -7,6 +7,8 @@
 //   - subtopicsForTopicKey(topic.key)
 //   - isValidSubtopic(topic.key, subtopic)
 
+import { canonicalTopicKey } from "@/lib/topicKeys";
+
 export type TopicKey =
   | "business-law-and-practice"
   | "dispute-resolution"
@@ -218,8 +220,34 @@ function normalize(s: string): string {
  * Returns the canonical TopicName for a TopicKey if it exists.
  */
 export function topicNameForKey(key: string): TopicName | null {
-  const k = (key || "").trim().toLowerCase() as TopicKey;
-  return (TOPIC_KEY_TO_NAME[k] ?? null) as TopicName | null;
+  const raw = (key || "").trim().toLowerCase() as TopicKey;
+  if (TOPIC_KEY_TO_NAME[raw]) {
+    return TOPIC_KEY_TO_NAME[raw] as TopicName;
+  }
+
+  const canonical = canonicalTopicKey(key);
+  if (!canonical) return null;
+
+  const canonicalToLegacy: Record<string, TopicKey> = {
+    BusinessLawandPractice: "business-law-and-practice",
+    DisputeResolution: "dispute-resolution",
+    Contract: "contract-law",
+    Tort: "tort-law",
+    LegalSystemofEnglandandWales: "legal-system-of-england-and-wales",
+    ConstitutionalAdministrativeEULegalServices:
+      "constitutional-administrative-eu-legal-services",
+    PropertyPractice: "property-practice",
+    WillsAndProbate: "wills-and-administration-of-estates",
+    SolicitorsAccounts: "solicitors-accounts",
+    LandLaw: "land-law",
+    Trusts: "trusts",
+    CriminalPractice: "criminal-law-and-practice",
+  };
+
+  const mapped = canonicalToLegacy[canonical];
+  if (!mapped) return null;
+
+  return TOPIC_KEY_TO_NAME[mapped] ?? null;
 }
 
 /**

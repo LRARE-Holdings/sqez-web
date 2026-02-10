@@ -13,6 +13,7 @@ import {
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase/client";
+import { sanitizeNextPath } from "@/lib/navigation";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value ?? "").trim());
@@ -101,11 +102,8 @@ export default function AuthPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const next = searchParams.get("next");
-  const nextPath = next ? decodeURIComponent(next) : "/app";
-  const signupHref = next
-    ? `/signup?next=${encodeURIComponent(next)}`
-    : "/signup";
+  const nextPath = sanitizeNextPath(searchParams.get("next"), "/app");
+  const signupHref = `/signup?next=${encodeURIComponent(nextPath)}`;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

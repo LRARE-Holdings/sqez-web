@@ -31,8 +31,8 @@ import {
 
 import { AppCard } from "@/components/ui/AppCard";
 import { auth, db } from "@/lib/firebase/client";
-import { allTopics } from "@/lib/topicCatalog";
 import { subtopicsForTopicKey } from "@/lib/catalog/subtopics";
+import { canonicalTopicKey, resolveTopicFromParam } from "@/lib/topicKeys";
 
 // TipTap
 import { EditorContent, ReactRenderer, useEditor } from "@tiptap/react";
@@ -48,59 +48,6 @@ import "tippy.js/dist/tippy.css";
 /* ---------------------------------------------
    Helpers (topic resolving)
 --------------------------------------------- */
-
-function safeDecode(v: string): string {
-  try {
-    return decodeURIComponent(v);
-  } catch {
-    return v;
-  }
-}
-
-function compact(s: string): string {
-  return s.replace(/\s+/g, "").trim();
-}
-
-function resolveTopic(param: string) {
-  const raw = (param ?? "").trim();
-  const decoded = safeDecode(raw);
-
-  const rawLower = raw.toLowerCase();
-  const decodedLower = decoded.toLowerCase();
-
-  const compactRawLower = compact(rawLower);
-  const compactDecodedLower = compact(decodedLower);
-
-  const byKey =
-    allTopics.find((t) => t.key.toLowerCase() === rawLower) ??
-    allTopics.find((t) => t.key.toLowerCase() === decodedLower) ??
-    allTopics.find((t) => t.key.toLowerCase() === compactRawLower) ??
-    allTopics.find((t) => t.key.toLowerCase() === compactDecodedLower);
-
-  if (byKey) return byKey;
-
-  const byTitle =
-    allTopics.find((t) => t.title.toLowerCase() === decodedLower) ??
-    allTopics.find((t) => t.title.toLowerCase() === rawLower);
-
-  if (byTitle) return byTitle;
-
-  const byCompactedTitle = allTopics.find(
-    (t) => compact(t.title.toLowerCase()) === compactDecodedLower,
-  );
-
-  if (byCompactedTitle) return byCompactedTitle;
-
-  return allTopics.find((t) => {
-    const tKey = t.key.toLowerCase();
-    const tTitle = t.title.toLowerCase();
-    return (
-      tKey.includes(compactDecodedLower) ||
-      tTitle.includes(decodedLower) ||
-      compact(tTitle).includes(compactDecodedLower)
-    );
-  });
-}
 
 /* ---------------------------------------------
    “@ Insert” catalog (V1 stub)
@@ -172,7 +119,8 @@ function buildInsertItemsForTopic(topicKey: string, topicTitle: string) {
     },
   ];
 
-  const subs = subtopicsForTopicKey(topicKey).map<InsertItem>((s) => ({
+  const canonicalKey = canonicalTopicKey(topicKey) ?? topicKey;
+  const subs = subtopicsForTopicKey(canonicalKey).map<InsertItem>((s) => ({
     id: `subtopic-${s}`,
     type: "subtopic",
     title: s,
@@ -462,7 +410,7 @@ export default function TopicNotesPage({
 
   const topic = useMemo(() => {
     const k = rawTopic.trim();
-    return k ? resolveTopic(k) : undefined;
+    return k ? resolveTopicFromParam(k) : undefined;
   }, [rawTopic]);
 
   // IMPORTANT: web must match iOS document IDs for notes.

@@ -13,20 +13,13 @@ import {
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase/client";
+import { sanitizeNextPath } from "@/lib/navigation";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 type Status = "idle" | "loading";
-
-function safeDecode(value: string) {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
 
 async function userHasName(uid: string) {
   try {
@@ -73,12 +66,6 @@ async function ensureUserDoc(params: { uid: string; email: string | null }) {
         persona: "",
         targetExamDate: null,
       },
-
-      // Billing / entitlement
-      isPro: false,
-      subscriptionTier: "free",
-      proUpdatedAt: serverTimestamp(),
-      lastTransactionID: "",
     });
     return;
   }
@@ -118,10 +105,8 @@ function passwordLooksOk(pw: string) {
 export default function SignupPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next");
-  const nextPath = next ? safeDecode(next) : "/onboarding";
-
-  const signinHref = next ? `/auth?next=${encodeURIComponent(next)}` : "/auth";
+  const nextPath = sanitizeNextPath(searchParams.get("next"), "/onboarding");
+  const signinHref = `/auth?next=${encodeURIComponent(nextPath)}`;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

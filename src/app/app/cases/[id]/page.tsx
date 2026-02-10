@@ -153,7 +153,7 @@ export default function CaseDetailPage({
     return (
       <div className="grid gap-6">
         <AppCard title="Case not found" subtitle="Missing case id.">
-          <Link href="/app/cases" className="btn btn-primary !no-underline">
+          <Link href="/app/cases" className="btn btn-primary no-underline!">
             <ChevronLeft className="mr-2 h-4 w-4" />
             Back to cases
           </Link>
@@ -171,12 +171,12 @@ export default function CaseDetailPage({
           </div>
 
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <Link href="/app/cases" className="btn btn-primary !no-underline">
+            <Link href="/app/cases" className="btn btn-primary no-underline!">
               <ChevronLeft className="mr-2 h-4 w-4" />
               Back to cases
             </Link>
 
-            <Link href="/app/learn" className="btn btn-outline !no-underline">
+            <Link href="/app/learn" className="btn btn-outline no-underline!">
               Browse topics
               <ChevronRight className="ml-2 h-4 w-4" />
             </Link>
@@ -212,7 +212,7 @@ export default function CaseDetailPage({
         </div>
 
         <div className="flex shrink-0 gap-2">
-          <Link href="/app/cases" className="btn btn-ghost !no-underline">
+          <Link href="/app/cases" className="btn btn-ghost no-underline!">
             <ChevronLeft className="mr-2 h-4 w-4" />
             Back
           </Link>
@@ -220,7 +220,7 @@ export default function CaseDetailPage({
           {primaryTopicKey ? (
             <Link
               href={`/app/learn/${encodeURIComponent(primaryTopicKey)}`}
-              className="btn btn-outline !no-underline"
+              className="btn btn-outline no-underline!"
             >
               Open topic
               <ChevronRight className="ml-2 h-4 w-4" />
@@ -353,7 +353,6 @@ export default function CaseDetailPage({
       {/* Placeholder for next: related / drill */}
       <AppCard
         title="Next step"
-        subtitle="We’ll wire this to Firestore and add drill actions."
       >
         <div className="mt-2 flex items-start gap-3">
           <div className="mt-0.5 rounded-2xl border border-white/10 bg-white/5 p-2">

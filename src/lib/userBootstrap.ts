@@ -24,10 +24,6 @@ export async function ensureUserBootstrap(params: {
         persona: "",
         targetExamDate: null, // you can switch to array later
       },
-      isPro: false,
-      subscriptionTier: "free",
-      proUpdatedAt: serverTimestamp(),
-      lastTransactionID: "",
       fcmToken: "",
       fcmTokenUpdatedAt: serverTimestamp(),
     });

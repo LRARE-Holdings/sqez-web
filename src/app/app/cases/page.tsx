@@ -2,69 +2,30 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { BookOpen, Filter, Search, ChevronRight, X, Gavel } from "lucide-react";
+import {
+  BookOpen,
+  Filter,
+  Search,
+  ChevronRight,
+  X,
+  Gavel,
+  ExternalLink,
+} from "lucide-react";
 
 import { AppCard, AppCardSoft } from "@/components/ui/AppCard";
+import { CASES } from "@/lib/catalog/cases";
 import { allTopics } from "@/lib/topicCatalog";
 import { subtopicsForTopicKey } from "@/lib/catalog/subtopics";
-
-type CaseItem = {
-  id: string;
-  name: string;
-  citation?: string;
-  year?: string;
-  court?: string;
-  summary: string;
-  topicKeys: string[];
-  subtopics?: string[];
-  tags?: string[];
-};
-
-/**
- * ✅ Seed data (placeholder)
- * Replace with Firestore later (e.g. /caseLibrary collection)
- */
-const CASES: CaseItem[] = [
-  {
-    id: "donoghue-v-stevenson",
-    name: "Donoghue v Stevenson",
-    citation: "[1932] AC 562",
-    year: "1932",
-    court: "HL",
-    summary:
-      "Established the modern duty of care in negligence (neighbour principle).",
-    topicKeys: ["tort-law"],
-    subtopics: ["Duty & Standard", "Negligent Misstatement"],
-    tags: ["negligence", "duty"],
-  },
-  {
-    id: "carlill-v-carbolic-smoke-ball",
-    name: "Carlill v Carbolic Smoke Ball Co",
-    citation: "[1893] 1 QB 256",
-    year: "1893",
-    court: "CA",
-    summary:
-      "Unilateral offers and acceptance by performance; intention in adverts.",
-    topicKeys: ["contract-law"],
-    subtopics: ["Offer & Acceptance", "Intention & Formalities"],
-    tags: ["offer", "acceptance"],
-  },
-  {
-    id: "salomon-v-salomon",
-    name: "Salomon v A Salomon & Co Ltd",
-    citation: "[1897] AC 22",
-    year: "1897",
-    court: "HL",
-    summary:
-      "Separate legal personality of a company; foundational company law case.",
-    topicKeys: ["business-law-and-practice"],
-    subtopics: ["Company Formation", "Corporate Governance"],
-    tags: ["company", "separate personality"],
-  },
-];
+import { canonicalTopicKey, topicKeysMatch } from "@/lib/topicKeys";
 
 function norm(s: string) {
   return (s || "").trim().toLowerCase();
+}
+
+function topicTitle(key: string) {
+  const canonical = canonicalTopicKey(key) ?? key;
+  const t = allTopics.find((x) => x.key === canonical);
+  return t?.title ?? key;
 }
 
 export default function CasesPage() {
@@ -90,7 +51,8 @@ export default function CasesPage() {
 
     return CASES.filter((c) => {
       // Topic filter
-      if (topicKey !== "ALL" && !c.topicKeys.includes(topicKey)) return false;
+      if (topicKey !== "ALL" && !c.topicKeys.some((k) => topicKeysMatch(k, topicKey)))
+        return false;
 
       // Subtopic filter
       if (subtopic !== "ALL") {
@@ -106,6 +68,7 @@ export default function CasesPage() {
         c.summary,
         ...(c.tags ?? []),
         ...(c.subtopics ?? []),
+        ...(c.topicKeys ?? []).map(topicTitle),
       ]
         .join(" ")
         .toLowerCase();
@@ -211,7 +174,10 @@ export default function CasesPage() {
               {topicKey !== "ALL" ? (
                 <>
                   {" "}
-                  for <span className="text-white/85">{topicKey}</span>
+                  for{" "}
+                  <span className="text-white/85">
+                    {topicOptions.find((t) => t.key === topicKey)?.title ?? topicKey}
+                  </span>
                 </>
               ) : null}
             </div>
@@ -219,7 +185,7 @@ export default function CasesPage() {
             {hasActiveFilters ? (
               <button
                 type="button"
-                className="btn btn-ghost px-3 py-2 !no-underline"
+                className="btn btn-ghost px-3 py-2 no-underline!"
                 onClick={() => {
                   setQuery("");
                   setTopicKey("ALL");
@@ -252,7 +218,7 @@ export default function CasesPage() {
                 <div className="mt-3">
                   <Link
                     href="/app/learn"
-                    className="btn btn-outline !no-underline"
+                    className="btn btn-outline no-underline!"
                   >
                     Browse topics
                     <ChevronRight className="ml-2 h-4 w-4" />
@@ -297,18 +263,38 @@ export default function CasesPage() {
                       ) : null}
                     </div>
                   ) : null}
+
+                  {c.topicKeys && c.topicKeys.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {c.topicKeys.slice(0, 2).map((k) => (
+                        <span key={k} className="chip">
+                          {topicTitle(k)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
-                <div className="shrink-0">
-                  {/* Placeholder action — later: link to /app/cases/[id] */}
+                <div className="shrink-0 flex flex-col gap-2 sm:items-end">
+                  {c.url ? (
+                    <a
+                      className="btn btn-outline w-full sm:w-auto no-underline!"
+                      href={c.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Read source
+                      <ExternalLink className="ml-2 h-4 w-4" />
+                    </a>
+                  ) : null}
                   <button
                     type="button"
-                    className="btn btn-outline w-full sm:w-auto"
+                    className="btn btn-ghost w-full sm:w-auto"
                     onClick={() => {
-                      // For now: push user to the topic page as a useful next action.
                       const firstTopic = c.topicKeys?.[0];
                       if (firstTopic) window.location.assign(`/app/learn/${firstTopic}`);
                     }}
+                    disabled={!c.topicKeys || c.topicKeys.length === 0}
                   >
                     Open topic
                     <ChevronRight className="ml-2 h-4 w-4" />
@@ -318,12 +304,6 @@ export default function CasesPage() {
             </AppCardSoft>
           ))
         )}
-      </div>
-
-      {/* Footer hint */}
-      <div className="text-xs text-white/55">
-        Next: wire this to a Firestore-backed <code className="px-1">caseLibrary</code>{" "}
-        collection and add a dedicated case detail page.
       </div>
     </div>
   );

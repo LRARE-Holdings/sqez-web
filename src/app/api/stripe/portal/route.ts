@@ -27,10 +27,12 @@ export async function POST(req: Request) {
 
     const db = adminDb();
     const userSnap = await db.doc(`users/${uid}`).get();
-    const user = userSnap.exists ? (userSnap.data() as any) : null;
+    const user = userSnap.exists ? (userSnap.data() as Record<string, unknown>) : null;
 
     const stripeCustomerId =
       typeof user?.stripeCustomerId === "string" ? user.stripeCustomerId : "";
+    const stripeSubscriptionId =
+      typeof user?.stripeSubscriptionId === "string" ? user.stripeSubscriptionId : "";
 
     if (!stripeCustomerId) {
       return NextResponse.json(
@@ -39,6 +41,41 @@ export async function POST(req: Request) {
             "No Stripe customer found for this user. Ensure stripeCustomerId is saved on users/{uid} (e.g. from checkout.session.completed).",
         },
         { status: 400 },
+      );
+    }
+
+    // Security check: ensure the customer/subscription really belongs to this Firebase uid.
+    let customerOwnedByUid = false;
+    let subscriptionOwnedByUid = false;
+
+    try {
+      const customer = await stripe.customers.retrieve(stripeCustomerId);
+      if (!("deleted" in customer) || !customer.deleted) {
+        customerOwnedByUid = customer.metadata?.uid === uid;
+      }
+    } catch {
+      customerOwnedByUid = false;
+    }
+
+    if (stripeSubscriptionId) {
+      try {
+        const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+        const subCustomerId =
+          typeof sub.customer === "string"
+            ? sub.customer
+            : sub.customer?.id;
+        subscriptionOwnedByUid =
+          Boolean(subCustomerId && subCustomerId === stripeCustomerId) &&
+          sub.metadata?.uid === uid;
+      } catch {
+        subscriptionOwnedByUid = false;
+      }
+    }
+
+    if (!customerOwnedByUid && !subscriptionOwnedByUid) {
+      return NextResponse.json(
+        { error: "Stripe ownership check failed for this account." },
+        { status: 403 },
       );
     }
 
@@ -54,9 +91,10 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ url: session.url });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Portal session creation failed";
     return NextResponse.json(
-      { error: err?.message ?? "Portal session creation failed" },
+      { error: message },
       { status: 500 },
     );
   }

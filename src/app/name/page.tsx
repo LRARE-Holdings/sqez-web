@@ -6,19 +6,16 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase/client";
+import { sanitizeNextPath } from "@/lib/navigation";
 
 export default function NamePage() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const next = params.get("next") || "/verify-email";
-  const nextDecoded = useMemo(() => {
-    try {
-      return decodeURIComponent(next);
-    } catch {
-      return next;
-    }
-  }, [next]);
+  const nextDecoded = useMemo(
+    () => sanitizeNextPath(params.get("next"), "/verify-email"),
+    [params],
+  );
 
   const [checking, setChecking] = useState(true);
   const [uid, setUid] = useState<string | null>(null);

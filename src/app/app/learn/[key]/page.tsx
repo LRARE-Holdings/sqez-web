@@ -19,8 +19,8 @@ import {
 } from "lucide-react";
 
 import { AppCard, AppCardSoft } from "@/components/ui/AppCard";
-import { allTopics } from "@/lib/topicCatalog";
 import { subtopicsForTopicKey, subtopicsForTopicName } from "@/lib/catalog/subtopics";
+import { resolveTopicFromParam } from "@/lib/topicKeys";
 
 type Difficulty = "ALL" | "Easy" | "Medium" | "Hard";
 type Mode = "quickfire" | "revise";
@@ -31,71 +31,6 @@ function safeDecode(v: string): string {
   } catch {
     return v;
   }
-}
-
-function compact(s: string): string {
-  return s.replace(/\s+/g, "").trim();
-}
-
-function normalizeTopicKey(k: string): string {
-  return (k || "")
-    .trim()
-    .toLowerCase()
-    .replace(/_/g, "-")
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function resolveTopic(param: string) {
-  const raw = (param ?? "").trim();
-  const decoded = safeDecode(raw);
-
-  const rawLower = raw.toLowerCase();
-  const decodedLower = decoded.toLowerCase();
-
-  const compactRawLower = compact(rawLower);
-  const compactDecodedLower = compact(decodedLower);
-
-  const byKey =
-    allTopics.find((t) => t.key.toLowerCase() === rawLower) ??
-    allTopics.find((t) => t.key.toLowerCase() === decodedLower) ??
-    allTopics.find((t) => t.key.toLowerCase() === compactRawLower) ??
-    allTopics.find((t) => t.key.toLowerCase() === compactDecodedLower);
-
-  if (byKey) return byKey;
-
-  const byTitle =
-    allTopics.find((t) => t.title.toLowerCase() === decodedLower) ??
-    allTopics.find((t) => t.title.toLowerCase() === rawLower);
-
-  if (byTitle) return byTitle;
-
-  const byCompactedTitle = allTopics.find(
-    (t) => compact(t.title.toLowerCase()) === compactDecodedLower,
-  );
-
-  if (byCompactedTitle) return byCompactedTitle;
-
-  return allTopics.find((t) => {
-    const tKey = t.key.toLowerCase();
-    const tTitle = t.title.toLowerCase();
-    return (
-      tKey.includes(compactDecodedLower) ||
-      tTitle.includes(decodedLower) ||
-      compact(tTitle).includes(compactDecodedLower)
-    );
-  });
-}
-
-function notesTopicIdFromTopicKey(topicKey: string) {
-  // business-law-and-practice -> BusinessLawAndPractice
-  return (topicKey || "")
-    .split("-")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
 }
 
 /** Basic segmented control */
@@ -192,7 +127,7 @@ export default function TopicDetailPage({
 
   const topic = useMemo(() => {
     const k = rawKey.trim();
-    return k ? resolveTopic(k) : undefined;
+    return k ? resolveTopicFromParam(k) : undefined;
   }, [rawKey]);
 
   // Prefer querystring overrides if present (nice for back/forward)
@@ -223,8 +158,7 @@ export default function TopicDetailPage({
     if (!topic) return [];
 
     // 1) Prefer key-based lookup (canonical topic keys).
-    const key1 = normalizeTopicKey(topic.key);
-    const byKey = subtopicsForTopicKey(key1);
+    const byKey = subtopicsForTopicKey(topic.key);
     if (byKey.length > 0) return [...byKey];
 
     // 2) Fall back to title-based lookup (handles catalog key mismatches).
@@ -575,9 +509,7 @@ export default function TopicDetailPage({
       <div className="mt-3">
         <Link
           className="btn btn-outline w-full sm:w-auto no-underline!"
-          href={`/app/notes/${encodeURIComponent(
-            notesTopicIdFromTopicKey(topic.key),
-          )}`}
+          href={`/app/notes/${encodeURIComponent(topic.key)}`}
         >
           Open notes
           <ChevronRight className="ml-2 h-4 w-4" />

@@ -15,11 +15,13 @@ import { ChevronRight, FileText, Search, X } from "lucide-react";
 import { AppCard, AppCardSoft } from "@/components/ui/AppCard";
 import { auth, db } from "@/lib/firebase/client";
 import { allTopics } from "@/lib/topicCatalog";
+import { canonicalTopicKey } from "@/lib/topicKeys";
 
 type NoteDoc = {
   topicKey?: string;
   topicTitle?: string;
   notes?: string;
+  html?: string;
   updatedAt?: Timestamp | { toDate?: () => Date } | string | null;
 };
 
@@ -60,6 +62,15 @@ function snippet(text: string, max = 140) {
   const t = text.replace(/\s+/g, " ").trim();
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1)}…`;
+}
+
+function htmlToText(html: string): string {
+  if (!html) return "";
+  return html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export default function NotesIndexPage() {
@@ -108,10 +119,15 @@ export default function NotesIndexPage() {
         const notesMap = new Map<string, { id: string; notes: string; updatedAt: Date | null }>();
         snap.docs.forEach((d) => {
           const data = d.data() as NoteDoc;
-          const topicKey = asString(data.topicKey) || d.id;
-          const notes = asString(data.notes);
+          const candidates = [asString(data.topicKey), asString(data.topicTitle), d.id];
+          const topicKey = candidates.map((v) => canonicalTopicKey(v)).find(Boolean) ?? null;
+          if (!topicKey) return;
+
+          const notes = asString(data.notes) || htmlToText(asString(data.html));
           const updatedAt = tsToDate(data.updatedAt);
-          notesMap.set(topicKey, { id: d.id, notes, updatedAt });
+          if (!notesMap.has(topicKey)) {
+            notesMap.set(topicKey, { id: d.id, notes, updatedAt });
+          }
         });
 
         // Build full list from allTopics, merging note metadata where present
@@ -344,13 +360,8 @@ export default function NotesIndexPage() {
 
       {/* Footer hint */}
       <div className="text-xs text-white/55">
-        Tip: topic notes are private to you and saved under <code className="px-1">users/&lt;uid&gt;/notes/&lt;topicKey&gt;</code>.
+        Tip: topic notes are private to you and saved under <code className="px-1">users/&lt;uid&gt;/notes/&lt;topicDocId&gt;</code>.
       </div>
     </div>
   );
-}
-
-function resolveTopicTitle(topicKey: string): string | null {
-  const t = allTopics.find((x) => x.key === topicKey);
-  return t?.title ?? null;
 }

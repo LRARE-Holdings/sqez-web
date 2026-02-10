@@ -3,72 +3,28 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { BookOpen, Filter, Search, ChevronRight, X, ExternalLink, Scale } from "lucide-react";
+import {
+  BookOpen,
+  Filter,
+  Search,
+  ChevronRight,
+  X,
+  ExternalLink,
+} from "lucide-react";
 
 import { AppCard, AppCardSoft } from "@/components/ui/AppCard";
+import { STATUTES } from "@/lib/catalog/statutes";
 import { allTopics } from "@/lib/topicCatalog";
 import { subtopicsForTopicKey } from "@/lib/catalog/subtopics";
-
-type Statute = {
-  id: string;
-  title: string;
-  year?: number;
-  short?: string;
-  url?: string;
-  topicKeys: string[];
-  subtopics?: string[];
-  tags?: string[];
-  priority?: "core" | "useful";
-};
-
-/**
- * ✅ Seed data (placeholder)
- * Replace with Firestore later (e.g. /statuteLibrary collection)
- */
-const STATUTES: Statute[] = [
-  {
-    id: "lra-2002",
-    title: "Land Registration Act",
-    year: 2002,
-    short:
-      "Registration, priority, notices/restrictions, overriding interests (headline).",
-    url: "https://www.legislation.gov.uk/ukpga/2002/9/contents",
-    topicKeys: ["land-law", "property-practice"],
-    subtopics: ["Registration (LRA 2002)", "Title & Restrictions"],
-    priority: "core",
-    tags: ["registration", "priority"],
-  },
-  {
-    id: "lpa-1925",
-    title: "Law of Property Act",
-    year: 1925,
-    short:
-      "Conveyancing framework: legal estates/interests, formalities, co-ownership.",
-    url: "https://www.legislation.gov.uk/ukpga/Geo5/15-16/20/contents",
-    topicKeys: ["land-law", "property-practice"],
-    subtopics: ["Estates & Interests", "Co-ownership"],
-    priority: "core",
-    tags: ["estates", "formalities"],
-  },
-  {
-    id: "mca-2005",
-    title: "Mental Capacity Act",
-    year: 2005,
-    short: "Capacity and best interests (relevant across practice).",
-    url: "https://www.legislation.gov.uk/ukpga/2005/9/contents",
-    topicKeys: ["wills-and-administration-of-estates"],
-    subtopics: ["Capacity"],
-    priority: "useful",
-    tags: ["capacity"],
-  },
-];
+import { canonicalTopicKey, topicKeysMatch } from "@/lib/topicKeys";
 
 function norm(s: string) {
   return (s || "").trim().toLowerCase();
 }
 
 function topicTitle(key: string) {
-  const t = allTopics.find((x) => x.key === key);
+  const canonical = canonicalTopicKey(key) ?? key;
+  const t = allTopics.find((x) => x.key === canonical);
   return t?.title ?? key;
 }
 
@@ -76,7 +32,6 @@ export default function StatutesPage() {
   const [query, setQuery] = useState("");
   const [topicKey, setTopicKey] = useState<string>("ALL");
   const [subtopic, setSubtopic] = useState<string>("ALL");
-  const [importance, setImportance] = useState<"ALL" | "core" | "useful">("ALL");
 
   const topicOptions = useMemo(() => {
     const uniq = Array.from(new Map(allTopics.map((t) => [t.key, t])).values());
@@ -92,11 +47,10 @@ export default function StatutesPage() {
     const q = norm(query);
 
     return STATUTES.filter((s) => {
-      // Importance filter
-      if (importance !== "ALL" && s.priority !== importance) return false;
-
       // Topic filter
-      if (topicKey !== "ALL" && !s.topicKeys.includes(topicKey)) return false;
+      if (topicKey !== "ALL" && !s.topicKeys.some((k) => topicKeysMatch(k, topicKey))) {
+        return false;
+      }
 
       // Subtopic filter
       if (subtopic !== "ALL") {
@@ -125,21 +79,16 @@ export default function StatutesPage() {
       if (pa !== pb) return pa - pb;
       return a.title.localeCompare(b.title);
     });
-  }, [query, topicKey, subtopic, importance]);
+  }, [query, topicKey, subtopic]);
 
   const hasActiveFilters =
-    topicKey !== "ALL" ||
-    subtopic !== "ALL" ||
-    importance !== "ALL" ||
-    query.trim().length > 0;
+    topicKey !== "ALL" || subtopic !== "ALL" || query.trim().length > 0;
 
   return (
     <div className="grid gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="text-2xl font-semibold tracking-tight text-white">
-            Statute library
-          </div>
+          <div className="text-2xl font-semibold tracking-tight text-white">Statute library</div>
           <div className="mt-1 text-sm text-white/70">
             Find the statutes you need, mapped to topics and subtopics.
           </div>
@@ -150,10 +99,8 @@ export default function StatutesPage() {
         title="Statutes"
         subtitle="Search + filter. Later we’ll surface these inside each Learn topic (and wire to Firestore)."
       >
-        {/* Filters */}
         <div className="mt-2 grid gap-3">
-          <div className="grid gap-3 xl:grid-cols-[1fr_220px_260px_200px]">
-            {/* Search */}
+          <div className="grid gap-3 xl:grid-cols-[1fr_220px_260px]">
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
               <div className="flex items-center gap-2 text-xs text-white/60">
                 <Search className="h-4 w-4 text-white/45" />
@@ -167,7 +114,6 @@ export default function StatutesPage() {
               />
             </div>
 
-            {/* Topic */}
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
               <div className="flex items-center gap-2 text-xs text-white/60">
                 <Filter className="h-4 w-4 text-white/45" />
@@ -179,7 +125,7 @@ export default function StatutesPage() {
                 onChange={(e) => {
                   const next = e.target.value;
                   setTopicKey(next);
-                  setSubtopic("ALL"); // reset when topic changes
+                  setSubtopic("ALL");
                 }}
               >
                 <option value="ALL">All topics</option>
@@ -191,7 +137,6 @@ export default function StatutesPage() {
               </select>
             </div>
 
-            {/* Subtopic */}
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
               <div className="flex items-center gap-2 text-xs text-white/60">
                 <BookOpen className="h-4 w-4 text-white/45" />
@@ -220,26 +165,8 @@ export default function StatutesPage() {
                 </div>
               ) : null}
             </div>
-
-            {/* Importance */}
-            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-              <div className="flex items-center gap-2 text-xs text-white/60">
-                <Scale className="h-4 w-4 text-white/45" />
-                <span>Importance</span>
-              </div>
-              <select
-                className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 outline-none focus:border-white/25"
-                value={importance}
-                onChange={(e) => setImportance(e.target.value as any)}
-              >
-                <option value="ALL">All</option>
-                <option value="core">Core</option>
-                <option value="useful">Useful</option>
-              </select>
-            </div>
           </div>
 
-          {/* Filter strip */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs text-white/60">
               Showing <span className="text-white/85">{filtered.length}</span>{" "}
@@ -260,7 +187,6 @@ export default function StatutesPage() {
                   setQuery("");
                   setTopicKey("ALL");
                   setSubtopic("ALL");
-                  setImportance("ALL");
                 }}
               >
                 <X className="mr-2 h-4 w-4" />
@@ -271,7 +197,6 @@ export default function StatutesPage() {
         </div>
       </AppCard>
 
-      {/* Results */}
       <div className="grid gap-3">
         {filtered.length === 0 ? (
           <AppCardSoft className="px-5 py-5">
@@ -280,9 +205,7 @@ export default function StatutesPage() {
                 <BookOpen className="h-4 w-4 text-white/70" />
               </div>
               <div>
-                <div className="text-sm font-semibold text-white">
-                  No statutes found
-                </div>
+                <div className="text-sm font-semibold text-white">No statutes found</div>
                 <div className="mt-1 text-sm text-white/70">
                   Try clearing filters, or search by name (e.g. “Land Registration Act”).
                 </div>
@@ -311,12 +234,11 @@ export default function StatutesPage() {
                   </div>
 
                   {s.short ? (
-                    <div className="mt-3 text-sm leading-relaxed text-white/70">
-                      {s.short}
-                    </div>
+                    <div className="mt-3 text-sm leading-relaxed text-white/70">{s.short}</div>
                   ) : null}
 
-                  {(s.subtopics && s.subtopics.length > 0) || (s.topicKeys && s.topicKeys.length > 0) ? (
+                  {(s.subtopics && s.subtopics.length > 0) ||
+                  (s.topicKeys && s.topicKeys.length > 0) ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {(s.subtopics ?? []).slice(0, 6).map((st) => (
                         <span key={st} className="chip">
@@ -362,11 +284,6 @@ export default function StatutesPage() {
         )}
       </div>
 
-      {/* Footer hint */}
-      <div className="text-xs text-white/55">
-        Next: wire this to a Firestore-backed <code className="px-1">statuteLibrary</code>{" "}
-        collection and add a dedicated statute detail page.
-      </div>
     </div>
   );
 }

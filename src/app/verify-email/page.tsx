@@ -5,12 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { onAuthStateChanged, sendEmailVerification } from "firebase/auth";
 
 import { auth } from "@/lib/firebase/client";
+import { sanitizeNextPath } from "@/lib/navigation";
 
 export default function VerifyEmailPage() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const next = params.get("next") || "/onboarding";
+  const next = sanitizeNextPath(params.get("next"), "/onboarding");
 
   const [status, setStatus] = useState<
     "checking" | "needs-verify" | "sending" | "sent" | "error"

@@ -76,10 +76,7 @@ export function ProGate({ children }: { children: React.ReactNode }) {
     // Single source of truth: users/{uid}.isPro
     const isPro =
       Boolean(userDoc?.isPro) ||
-      Boolean(userDoc?.betaUnlimited) ||
-      String(userDoc?.subscriptionTier || "")
-        .toLowerCase()
-        .includes("pro");
+      Boolean(userDoc?.betaUnlimited);
 
     if (!isPro && !allowWithoutPro) {
       router.replace("/app/not-pro");
