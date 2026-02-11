@@ -31,8 +31,10 @@ import {
 
 import { AppCard } from "@/components/ui/AppCard";
 import { auth, db } from "@/lib/firebase/client";
+import { casesForTopicKey } from "@/lib/catalog/cases";
+import { statutesForTopicKey } from "@/lib/catalog/statutes";
 import { subtopicsForTopicKey } from "@/lib/catalog/subtopics";
-import { canonicalTopicKey, resolveTopicFromParam } from "@/lib/topicKeys";
+import { resolveTopicFromParam } from "@/lib/topicKeys";
 
 // TipTap
 import { EditorContent, ReactRenderer, useEditor } from "@tiptap/react";
@@ -60,6 +62,7 @@ type InsertItem = {
   type: InsertItemType;
   title: string;
   subtitle?: string;
+  searchText?: string;
   insertText: {
     heading: string;
     body?: string;
@@ -68,63 +71,45 @@ type InsertItem = {
 };
 
 function buildInsertItemsForTopic(topicKey: string, topicTitle: string) {
-  // Replace with your real libraries later.
-  const cases: InsertItem[] = [
-    {
-      id: "case-carlill",
+  const cases = casesForTopicKey(topicKey).map<InsertItem>((c) => {
+    const summaryParts = [c.citation, c.year ? `(${c.year})` : null].filter(Boolean).join(" ");
+    const subtitle = [summaryParts, c.summary].filter(Boolean).join(" · ");
+    return {
+      id: `case-${c.id}`,
       type: "case",
-      title: "Carlill v Carbolic Smoke Ball Co",
-      subtitle: "Offer to the world; acceptance by performance (1893).",
+      title: c.name,
+      subtitle,
+      searchText: `${c.name} ${c.citation ?? ""} ${c.year ?? ""} ${c.court ?? ""} ${c.summary} ${(c.tags ?? []).join(" ")}`,
       insertText: {
-        heading: "Case: Carlill v Carbolic Smoke Ball Co (1893)",
-        body: "Unilateral offer to the world can be accepted by performance; intention/consideration satisfied on facts.",
-        citation: "Use: offer, acceptance, unilateral contracts.",
+        heading: `Case: ${c.name}${c.year ? ` (${c.year})` : ""}`,
+        body: c.summary,
+        citation: [c.citation, c.court].filter(Boolean).join(" · ") || c.url,
       },
-    },
-    {
-      id: "case-donoghue",
-      type: "case",
-      title: "Donoghue v Stevenson",
-      subtitle: "Neighbour principle; duty of care foundation (1932).",
-      insertText: {
-        heading: "Case: Donoghue v Stevenson (1932)",
-        body: "Neighbour principle: duty of care for reasonably foreseeable harm to those closely/directly affected.",
-        citation: "Use: negligence duty of care.",
-      },
-    },
-  ];
+    };
+  });
 
-  const statutes: InsertItem[] = [
-    {
-      id: "statute-cra2015",
+  const statutes = statutesForTopicKey(topicKey).map<InsertItem>((s) => {
+    const titleWithYear = s.year ? `${s.title} ${s.year}` : s.title;
+    return {
+      id: `statute-${s.id}`,
       type: "statute",
-      title: "Consumer Rights Act 2015",
-      subtitle: "Consumer contract rights & remedies.",
+      title: titleWithYear,
+      subtitle: s.short,
+      searchText: `${s.title} ${s.year ?? ""} ${s.short ?? ""} ${(s.tags ?? []).join(" ")}`,
       insertText: {
-        heading: "Statute: Consumer Rights Act 2015",
-        body: "Key consumer rights (goods/services/digital) and remedies including repair, replacement, price reduction, rejection in certain cases.",
-        citation: "Link: legislation.gov.uk",
+        heading: `Statute: ${titleWithYear}`,
+        body: s.short,
+        citation: s.url,
       },
-    },
-    {
-      id: "statute-limitation1980",
-      type: "statute",
-      title: "Limitation Act 1980",
-      subtitle: "Time limits for civil claims.",
-      insertText: {
-        heading: "Statute: Limitation Act 1980",
-        body: "Sets primary limitation periods and rules on accrual, postponement, and exceptions.",
-        citation: "Use: deadlines, procedural bars.",
-      },
-    },
-  ];
+    };
+  });
 
-  const canonicalKey = canonicalTopicKey(topicKey) ?? topicKey;
-  const subs = subtopicsForTopicKey(canonicalKey).map<InsertItem>((s) => ({
+  const subs = subtopicsForTopicKey(topicKey).map<InsertItem>((s) => ({
     id: `subtopic-${s}`,
     type: "subtopic",
     title: s,
     subtitle: `Subtopic in ${topicTitle}`,
+    searchText: `${s} ${topicTitle}`,
     insertText: {
       heading: `Subtopic: ${s}`,
       body: "Notes:",
@@ -271,7 +256,7 @@ function buildAtInsertExtension(allItems: InsertItem[]) {
 
             return allItems
               .filter((it) => {
-                const hay = `${it.title} ${it.subtitle ?? ""}`.toLowerCase();
+                const hay = `${it.title} ${it.subtitle ?? ""} ${it.searchText ?? ""}`.toLowerCase();
                 return hay.includes(q);
               })
               .slice(0, 50);
