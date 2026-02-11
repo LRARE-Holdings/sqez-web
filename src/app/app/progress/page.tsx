@@ -442,17 +442,6 @@ export default function ProgressPage() {
               </Link>
             </div>
 
-            <div className="mt-3 text-xs text-white/55">
-              If these tiles look empty, it usually means your session writer isn’t updating{" "}
-              <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-[11px] text-white/80">
-                users/{`{uid}`}/stats/current
-              </code>{" "}
-              and{" "}
-              <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-[11px] text-white/80">
-                users/{`{uid}`}/metrics/*
-              </code>
-              .
-            </div>
           </div>
         </div>
       </AppCard>
