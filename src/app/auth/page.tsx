@@ -10,10 +10,10 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
 } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
-import { auth, db } from "@/lib/firebase/client";
+import { auth } from "@/lib/firebase/client";
 import { sanitizeNextPath } from "@/lib/navigation";
+import { ensureUserBootstrap } from "@/lib/userBootstrap";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value ?? "").trim());
@@ -31,49 +31,6 @@ function logAuthError(context: string, err: any) {
   console.log("full error:", err);
   console.trace();
   console.groupEnd();
-}
-
-async function ensureUserDoc(params: { uid: string; email: string | null }) {
-  const { uid, email } = params;
-
-  const ref = doc(db, "users", uid);
-  const snap = await getDoc(ref);
-
-  const base = {
-    updatedAt: serverTimestamp(),
-    email: email ?? "",
-  };
-
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      ...base,
-      createdAt: serverTimestamp(),
-
-      // Profile
-      firstName: "",
-      lastName: "",
-
-      // Notifications
-      fcmToken: "",
-      fcmTokenUpdatedAt: serverTimestamp(),
-
-      // Security
-      mfaEnrolled: false,
-
-      // Onboarding
-      onboardingCompleted: false,
-      onboarding: {
-        hoursPerWeek: 0,
-        persona: "",
-        targetExamDate: null,
-      },
-
-      // Billing / entitlement is server-owned (e.g. Stripe/webhooks). Do not set client-side.
-    });
-    return;
-  }
-
-  await setDoc(ref, base, { merge: true });
 }
 
 function ProviderButton({
@@ -136,9 +93,9 @@ export default function AuthPage() {
 
     // Firestore doc creation/merge should never block auth UX.
     try {
-      await ensureUserDoc({ uid: user.uid, email: user.email });
+      await ensureUserBootstrap({ uid: user.uid, email: user.email });
     } catch (e) {
-      console.error("⚠️ AUTH OK, FIRESTORE FAILED (ensureUserDoc)", e);
+      console.error("⚠️ AUTH OK, FIRESTORE FAILED (ensureUserBootstrap)", e);
     }
 
     router.push(nextPath);

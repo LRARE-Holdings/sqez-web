@@ -10,10 +10,11 @@ import {
   signInWithPopup,
   type User,
 } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase/client";
 import { sanitizeNextPath } from "@/lib/navigation";
+import { ensureUserBootstrap } from "@/lib/userBootstrap";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -33,45 +34,6 @@ async function userHasName(uid: string) {
   } catch {
     return false;
   }
-}
-
-async function ensureUserDoc(params: { uid: string; email: string | null }) {
-  const { uid, email } = params;
-
-  const ref = doc(db, "users", uid);
-  const snap = await getDoc(ref);
-
-  const base = {
-    updatedAt: serverTimestamp(),
-    email: email ?? "",
-  };
-
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      ...base,
-      createdAt: serverTimestamp(),
-
-      // Profile
-      firstName: "",
-      lastName: "",
-
-      // Notifications
-      fcmToken: "",
-      fcmTokenUpdatedAt: serverTimestamp(),
-
-      // Onboarding
-      onboardingCompleted: false,
-      onboarding: {
-        hoursPerWeek: 0,
-        persona: "",
-        targetExamDate: null,
-      },
-    });
-    return;
-  }
-
-  // Merge-only to avoid clobbering existing data
-  await setDoc(ref, base, { merge: true });
 }
 
 function ProviderButton({
@@ -131,10 +93,10 @@ export default function SignupPage() {
     const { user, isPasswordUser } = params;
 
     try {
-      await ensureUserDoc({ uid: user.uid, email: user.email });
+      await ensureUserBootstrap({ uid: user.uid, email: user.email });
     } catch (e) {
       // If your rules block initial writes, this is where you'll see it.
-      console.error("ensureUserDoc failed", e);
+      console.error("ensureUserBootstrap failed", e);
     }
 
     // We always want name captured at least once.

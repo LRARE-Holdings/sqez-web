@@ -9,6 +9,12 @@ export async function ensureUserBootstrap(params: {
 
   const userRef = doc(db, "users", uid);
   const snap = await getDoc(userRef);
+  const data = snap.data() as
+    | {
+        onboardingCompleted?: unknown;
+        onboarding?: unknown;
+      }
+    | undefined;
 
   if (!snap.exists()) {
     await setDoc(userRef, {
@@ -28,11 +34,24 @@ export async function ensureUserBootstrap(params: {
       fcmTokenUpdatedAt: serverTimestamp(),
     });
   } else {
-    // Keep existing user doc, but ensure updatedAt at least moves forward.
-    await setDoc(
-      userRef,
-      { updatedAt: serverTimestamp(), email: email ?? "" },
-      { merge: true },
-    );
+    const patch: Record<string, unknown> = {
+      // Keep existing user doc, but ensure updatedAt at least moves forward.
+      updatedAt: serverTimestamp(),
+      email: email ?? "",
+    };
+
+    // Record onboarding-required state for legacy / provider-created docs that missed this.
+    if (typeof data?.onboardingCompleted !== "boolean") {
+      patch.onboardingCompleted = false;
+    }
+    if (!data?.onboarding || typeof data.onboarding !== "object") {
+      patch.onboarding = {
+        hoursPerWeek: 0,
+        persona: "",
+        targetExamDate: null,
+      };
+    }
+
+    await setDoc(userRef, patch, { merge: true });
   }
 }
