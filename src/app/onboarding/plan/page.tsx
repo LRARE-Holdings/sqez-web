@@ -181,36 +181,17 @@ export default function PlanPage() {
     setLoadingPlan(plan);
 
     try {
-      const token = await authUser.getIdToken();
-
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ plan }),
-      });
-
-      const data = (await res.json()) as { url?: string; error?: string };
-
-      if (data.url) {
-        try {
-          await writeOnboarding({
-            recommendedPlan: rec.kind,
-            runwayMonths: rec.runwayMonths,
-            chosenPlan: plan,
-          });
-        } catch (e) {
-          console.error("writeOnboarding(plan) failed", e);
-        }
-
-        window.location.assign(data.url);
-        return;
+      try {
+        await writeOnboarding({
+          recommendedPlan: rec.kind,
+          runwayMonths: rec.runwayMonths,
+          chosenPlan: plan,
+        });
+      } catch (e) {
+        console.error("writeOnboarding(plan) failed", e);
       }
-
-      console.error(data.error || "Stripe checkout failed");
-      setLoadingPlan(null);
+      router.push(`/app/upgrade?plan=${plan}&source=onboarding`);
+      return;
     } catch (e) {
       console.error(e);
       setLoadingPlan(null);
@@ -319,8 +300,7 @@ export default function PlanPage() {
 
         {/* Micro footer */}
         <div className="text-[11px] leading-relaxed text-white/50">
-          You’ll be redirected to Stripe Checkout. If you return and still see this page,
-          refresh once — entitlement can take a moment to confirm.{" "}
+          Checkout stays in-app with Stripe-secured card or wallet payment setup.{" "}
           <Link href="https://lrare.co.uk/terms" className="underline underline-offset-2">
             Terms
           </Link>

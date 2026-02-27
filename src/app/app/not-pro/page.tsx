@@ -78,25 +78,8 @@ function inferRecommendation(onboarding?: Record<string, unknown>) {
 }
 
 async function startCheckout(user: User, plan: "MONTHLY" | "ANNUAL") {
-  const token = await user.getIdToken();
-
-  const res = await fetch("/api/stripe/checkout", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ plan }),
-  });
-
-  const data = (await res.json()) as { url?: string; error?: string };
-
-  if (data.url) {
-    window.location.assign(data.url);
-    return;
-  }
-
-  throw new Error(data.error || `Stripe checkout failed (${res.status})`);
+  if (!user) throw new Error("Not signed in");
+  window.location.assign(`/app/upgrade?plan=${plan}&source=app`);
 }
 
 export default function NotProPage() {
@@ -171,7 +154,7 @@ export default function NotProPage() {
     const annualAsMonthly = annual / 12;
     const savingsPct = Math.round(((monthly - annualAsMonthly) / monthly) * 100);
 
-    // Trials (hosted Stripe Checkout):
+    // Trials (custom Stripe Elements checkout):
     const trialMonthlyDays = 14;
     const trialAnnualDays = 30;
 
