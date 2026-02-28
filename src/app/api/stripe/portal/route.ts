@@ -5,9 +5,21 @@ import { adminAuth, adminDb } from "@/lib/firebase/admin";
 
 export const runtime = "nodejs";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: "2025-12-15.clover",
-});
+let stripeClient: Stripe | null = null;
+
+function getStripe(): Stripe {
+  if (stripeClient) return stripeClient;
+
+  const secret = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!secret) {
+    throw new Error("Missing STRIPE_SECRET_KEY env var");
+  }
+
+  stripeClient = new Stripe(secret, {
+    apiVersion: "2025-12-15.clover",
+  });
+  return stripeClient;
+}
 
 function resolveSiteUrl() {
   const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
@@ -22,6 +34,7 @@ function resolveSiteUrl() {
 
 export async function POST(req: Request) {
   try {
+    const stripe = getStripe();
     const authHeader = req.headers.get("authorization") || "";
     const match = authHeader.match(/^Bearer (.+)$/);
     const idToken = match?.[1];

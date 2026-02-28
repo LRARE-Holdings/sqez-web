@@ -8,13 +8,6 @@ import { Resend } from "resend";
  * - Validate env vars early so failures are loud.
  */
 
-const apiKey = process.env.RESEND_API_KEY;
-if (!apiKey || !String(apiKey).trim()) {
-  throw new Error("Missing RESEND_API_KEY env var");
-}
-
-const resend = new Resend(String(apiKey).trim());
-
 function requireEnv(name: string): string {
   const v = process.env[name];
   if (!v || !String(v).trim()) throw new Error(`Missing ${name} env var`);
@@ -23,6 +16,11 @@ function requireEnv(name: string): string {
 
 function safeTrim(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
+}
+
+function getResendClient(): Resend {
+  const apiKey = requireEnv("RESEND_API_KEY");
+  return new Resend(apiKey);
 }
 
 export type FreeTrialEmailParams = {
@@ -52,6 +50,7 @@ export async function sendFreeTrialEmail(params: FreeTrialEmailParams) {
   if (!to) throw new Error("Missing customerEmail");
 
   const replyTo = safeTrim(process.env.RESEND_REPLY_TO) || "support@lrare.co.uk";
+  const resend = getResendClient();
 
   const { data, error } = await resend.emails.send({
     from,

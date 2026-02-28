@@ -5,9 +5,21 @@ import { adminAuth, adminDb } from "@/lib/firebase/admin";
 
 export const runtime = "nodejs";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: "2025-12-15.clover",
-});
+let stripeClient: Stripe | null = null;
+
+function getStripe(): Stripe {
+  if (stripeClient) return stripeClient;
+
+  const secret = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!secret) {
+    throw new Error("Missing STRIPE_SECRET_KEY env var");
+  }
+
+  stripeClient = new Stripe(secret, {
+    apiVersion: "2025-12-15.clover",
+  });
+  return stripeClient;
+}
 
 type Plan = "MONTHLY" | "ANNUAL";
 type IntentType = "setup" | "payment";
@@ -47,6 +59,7 @@ function hashIdempotencyKey(raw: string): string {
 }
 
 async function resolveDiscount(code: string) {
+  const stripe = getStripe();
   // Primary path: user-facing promo/discount code.
   const promos = await stripe.promotionCodes.list({
     code,
@@ -73,6 +86,7 @@ async function resolveDiscount(code: string) {
 }
 
 async function ensureCustomer(uid: string, email: string | undefined) {
+  const stripe = getStripe();
   const db = adminDb();
   const userRef = db.doc(`users/${uid}`);
   const userSnap = await userRef.get();
@@ -126,6 +140,7 @@ async function ensureCustomer(uid: string, email: string | undefined) {
 async function getCheckoutIntentFromSubscription(
   subscriptionId: string,
 ): Promise<{ clientSecret: string | null; intentType: IntentType }> {
+  const stripe = getStripe();
   const subscription = (await stripe.subscriptions.retrieve(subscriptionId, {
     expand: ["latest_invoice.payment_intent", "pending_setup_intent"],
   })) as SubscriptionForCheckout;
@@ -174,6 +189,7 @@ async function getReusablePendingSubscription(args: {
   plan: Plan;
   userData: UserBillingDoc | null;
 }) {
+  const stripe = getStripe();
   const pendingId =
     typeof args.userData?.stripePendingSubscriptionId === "string"
       ? args.userData.stripePendingSubscriptionId.trim()
@@ -206,6 +222,7 @@ async function getReusablePendingSubscription(args: {
 
 export async function POST(req: Request) {
   try {
+    const stripe = getStripe();
     // Authenticate user via Firebase ID token
     const authHeader = req.headers.get("authorization") || "";
     const match = authHeader.match(/^Bearer (.+)$/);

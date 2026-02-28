@@ -5,9 +5,21 @@ import { sendFreeTrialEmail } from "@/lib/email/resend";
 
 export const runtime = "nodejs";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: "2025-12-15.clover",
-});
+let stripeClient: Stripe | null = null;
+
+function getStripe(): Stripe {
+  if (stripeClient) return stripeClient;
+
+  const secret = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!secret) {
+    throw new Error("Missing STRIPE_SECRET_KEY env var");
+  }
+
+  stripeClient = new Stripe(secret, {
+    apiVersion: "2025-12-15.clover",
+  });
+  return stripeClient;
+}
 
 function formatDateForEmail(d: Date): string {
   try {
@@ -26,6 +38,7 @@ async function resolveEmailForUser(params: {
   stripeCustomerId?: string;
   sessionEmail?: string;
 }): Promise<string | null> {
+  const stripe = getStripe();
   const fromSession = typeof params.sessionEmail === "string" ? params.sessionEmail.trim() : "";
   if (fromSession) return fromSession;
 
@@ -87,6 +100,7 @@ function getString(value: unknown): string | undefined {
 }
 
 export async function POST(req: Request) {
+  const stripe = getStripe();
   const sig = req.headers.get("stripe-signature");
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
