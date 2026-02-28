@@ -150,7 +150,7 @@ export default function NotProPage() {
 
   const prices = useMemo(() => {
     const monthly = 14.99;
-    const annual = 79.99;
+    const annual = 99.99;
     const annualAsMonthly = annual / 12;
     const savingsPct = Math.round(((monthly - annualAsMonthly) / monthly) * 100);
 

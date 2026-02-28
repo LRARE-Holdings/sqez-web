@@ -326,12 +326,12 @@ export default function HomePage() {
 
                     <div className="text-right">
                       <div className="text-3xl font-semibold tracking-tight text-white">
-                        £79.99
+                        £99.99
                       </div>
                       <div className="mt-1 text-xs text-white/70">per year</div>
                       <div className="mt-2 text-xs text-white/70">
                         Equivalent{" "}
-                        <span className="font-medium text-white">£6.67/mo</span>
+                        <span className="font-medium text-white">£8.33/mo</span>
                       </div>
                     </div>
                   </div>
@@ -339,7 +339,7 @@ export default function HomePage() {
                   <div className="mt-4 rounded-xl border border-white/12 bg-white/5 px-4 py-3">
                     <div className="text-xs text-white/70">You save</div>
                     <div className="mt-1 text-sm font-semibold text-white">
-                      55.6% per year
+                      44.4% per year
                     </div>
                     <div className="mt-1 text-xs text-white/70">
                       (vs £14.99/month billed monthly on the web)
@@ -420,7 +420,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="mt-3 text-xs text-white/70">
-                  Web annual saves you 55.6% if you’d otherwise stay for a year.
+                  Web annual saves you 44.4% if you’d otherwise stay for a year.
                 </div>
               </div>
             </div>

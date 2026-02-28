@@ -13,7 +13,7 @@ import { recommendPlan } from "@/lib/onboarding/store";
 import { writeOnboarding } from "@/lib/onboarding/firestore";
 
 const PRICE_MONTHLY = 14.99;
-const PRICE_ANNUAL = 79.99;
+const PRICE_ANNUAL = 99.99;
 
 const TRIAL_MONTHLY_DAYS = 14;
 const TRIAL_ANNUAL_DAYS = 30;

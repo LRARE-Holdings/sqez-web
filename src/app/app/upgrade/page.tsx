@@ -45,7 +45,7 @@ const PLAN_COPY: Record<
   ANNUAL: {
     label: "Annual",
     trialDays: 30,
-    price: "£79.99 / year",
+    price: "£99.99 / year",
     note: "Best value",
   },
 };
