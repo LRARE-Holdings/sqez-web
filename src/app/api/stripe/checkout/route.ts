@@ -68,7 +68,11 @@ async function ensureCustomer(uid: string, email: string | undefined) {
   if (existingId) {
     try {
       const existing = await stripe.customers.retrieve(existingId);
-      if (!("deleted" in existing)) {
+      if (
+        !("deleted" in existing) &&
+        typeof existing.metadata?.uid === "string" &&
+        existing.metadata.uid === uid
+      ) {
         return existing.id;
       }
     } catch {

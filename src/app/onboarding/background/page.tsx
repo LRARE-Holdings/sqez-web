@@ -59,8 +59,8 @@ export default function BackgroundPage() {
     setAnswers({ legalBackground });
   }
 
-  async function next() {
-    const uni = universityCanonical; // empty string if not selected from list
+  async function next(universityInput = university) {
+    const uni = canonicalUniversity(universityInput); // empty string if not selected from list
     setAnswers({ university: uni || undefined });
 
     // Persist university to Firestore (single source of truth)
@@ -177,11 +177,7 @@ export default function BackgroundPage() {
               className="btn btn-outline"
               onClick={() => {
                 setUniversity("");
-                // next() reads from state; call with an empty string immediately
-                // by syncing the local variable via a microtask.
-                queueMicrotask(() => {
-                  void next();
-                });
+                void next("");
               }}
               disabled={!canContinue}
             >

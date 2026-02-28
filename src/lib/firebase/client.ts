@@ -15,15 +15,27 @@ export const app = getApps().length ? getApps()[0]! : initializeApp(firebaseConf
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 
-if (typeof window !== "undefined") {
-  // Runtime check for domain/config mismatches.
+const enableFirebaseDebug =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_FIREBASE_DEBUG === "1";
+
+if (typeof window !== "undefined" && enableFirebaseDebug) {
+  // Runtime check for domain/config mismatches, enabled only for local debug.
   console.log("[firebase] origin:", window.location.origin);
   console.log("[firebase] authDomain:", auth.config.authDomain);
   console.log("[firebase] projectId:", auth.app.options.projectId);
-  // Expose a minimal debug handle for console inspection.
-  (window as any).__sqezFirebaseDebug = {
-    app,
-    auth,
+
+  type DebugWindow = Window & {
+    __sqezFirebaseDebug?: {
+      config: {
+        apiKey?: string;
+        authDomain?: string;
+        projectId?: string;
+      };
+    };
+  };
+
+  (window as DebugWindow).__sqezFirebaseDebug = {
     config: {
       apiKey: auth.app.options.apiKey,
       authDomain: auth.config.authDomain,
