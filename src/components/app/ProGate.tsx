@@ -35,7 +35,14 @@ export function ProGate({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    let unsubDoc: (() => void) | null = null;
+
     const unsub = onAuthStateChanged(auth, (u) => {
+      if (unsubDoc) {
+        unsubDoc();
+        unsubDoc = null;
+      }
+
       if (!u) {
         const next = encodeURIComponent(pathname || "/app");
         router.replace(`/auth?next=${next}`);
@@ -46,7 +53,7 @@ export function ProGate({ children }: { children: React.ReactNode }) {
       setState({ kind: "loading" });
 
       const ref = doc(db, "users", u.uid);
-      const unsubDoc = onSnapshot(
+      unsubDoc = onSnapshot(
         ref,
         (snap) => {
           const data = (snap.data() as UserDoc) || null;
@@ -62,10 +69,14 @@ export function ProGate({ children }: { children: React.ReactNode }) {
         },
       );
 
-      return () => unsubDoc();
     });
 
-    return () => unsub();
+    return () => {
+      if (unsubDoc) {
+        unsubDoc();
+      }
+      unsub();
+    };
   }, [router, pathname]);
 
   useEffect(() => {

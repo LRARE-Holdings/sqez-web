@@ -47,6 +47,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [navOpen]);
 
   // Close on Escape
+  const closeNav = () => setNavOpen(false);
+  const openNav = () => setNavOpen(true);
+
   useEffect(() => {
     if (!navOpen) return;
 
@@ -57,9 +60,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [navOpen]);
-
-  const closeNav = () => setNavOpen(false);
-  const openNav = () => setNavOpen(true);
 
   const overlayClass = useMemo(() => {
     return [

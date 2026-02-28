@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import {
   addDoc,
@@ -14,7 +14,11 @@ import {
 
 import { auth, db } from "@/lib/firebase/client";
 import { byKey, byTitle } from "@/lib/topicCatalog";
-import { fetchActiveQuestions } from "@/lib/questions/firestore";
+import {
+  fetchActiveQuestions,
+  fetchActiveQuestionsByTopic,
+  fetchQuestionsByIds,
+} from "@/lib/questions/firestore";
 import type { FireQuestion } from "@/lib/questions/types";
 
 type Phase = "question" | "autopsy" | "done";
@@ -126,9 +130,6 @@ export default function SessionPage() {
       setLoading(true);
 
       try {
-        const active = await fetchActiveQuestions(500);
-        if (cancelled) return;
-
         const decoded = topicParam ? decodeURIComponent(topicParam) : null;
 
         // Accept canonical key or human title.
@@ -139,21 +140,7 @@ export default function SessionPage() {
           : undefined;
 
         const wantedTitle = topicMeta?.title ?? decoded ?? null;
-
         const isRevisionMode = modeParam === "revise" || modeParam === "revision";
-
-        // For revision sessions (from /app/revise), default to ALL topics unless a topic was explicitly provided.
-        const shouldScopeToTopic = Boolean(wantedTitle) && !isRevisionMode;
-
-        const scoped = shouldScopeToTopic
-          ? active.filter((q) => {
-              const a = (q.topic ?? "").trim().toLowerCase();
-              const b = wantedTitle!.trim().toLowerCase();
-              return a === b;
-            })
-          : active;
-
-        setQuestions(scoped);
 
         // Pool selection:
         // - Normal sessions: shuffle and take 10 (or fewer).
@@ -164,13 +151,10 @@ export default function SessionPage() {
 
         // a) Query string IDs (preferred)
         if (isRevisionMode && idsParam) {
-          const wanted = idsParam
+          ids = idsParam
             .split(",")
             .map((s) => s.trim())
             .filter((s) => s.length > 0);
-
-          const available = new Set(scoped.map((qq) => qq.questionId));
-          ids = wanted.filter((id) => available.has(id));
         }
 
         // b) Backwards compatible sessionStorage IDs
@@ -179,18 +163,37 @@ export default function SessionPage() {
             const raw = sessionStorage.getItem("sqez.revision.ids");
             const parsed = raw ? (JSON.parse(raw) as unknown) : null;
             if (Array.isArray(parsed)) {
-              const wanted = parsed.filter((x): x is string => typeof x === "string");
-              const available = new Set(scoped.map((qq) => qq.questionId));
-              ids = wanted.filter((id) => available.has(id));
+              ids = parsed.filter((x): x is string => typeof x === "string");
             }
           } catch {
             ids = [];
           }
         }
 
+        let loadedQuestions: FireQuestion[];
+        if (ids.length > 0) {
+          loadedQuestions = await fetchQuestionsByIds(ids);
+        } else if (wantedTitle && !isRevisionMode) {
+          loadedQuestions = await fetchActiveQuestionsByTopic(wantedTitle, 220);
+        } else {
+          loadedQuestions = await fetchActiveQuestions(220);
+        }
+        if (cancelled) return;
+
+        if (ids.length > 0) {
+          // Keep revision sessions in caller-specified order.
+          const byId = new Map(loadedQuestions.map((qq) => [qq.questionId, qq]));
+          loadedQuestions = ids
+            .map((id) => byId.get(id))
+            .filter((qq): qq is FireQuestion => Boolean(qq));
+          ids = loadedQuestions.map((qq) => qq.questionId);
+        }
+
+        setQuestions(loadedQuestions);
+
         // Default pool
         if (ids.length === 0) {
-          ids = shuffle(scoped.map((qq) => qq.questionId)).slice(0, 10);
+          ids = shuffle(loadedQuestions.map((qq) => qq.questionId)).slice(0, 10);
         }
 
         setPool(ids);
@@ -418,12 +421,12 @@ await runTransaction(db, async (tx) => {
   }
 
   // --------- Handlers ----------
-  function onSelect(idx: number) {
+  const onSelect = useCallback((idx: number) => {
     if (phase !== "question") return;
     setSelected(idx);
-  }
+  }, [phase]);
 
-  function onSubmit() {
+  const onSubmit = useCallback(() => {
     if (!q) return;
     if (selected === null) return;
 
@@ -439,9 +442,9 @@ await runTransaction(db, async (tx) => {
     });
 
     setPhase("autopsy");
-  }
+  }, [q, selected]);
 
-  async function onNext() {
+  const onNext = useCallback(async () => {
     if (!q || !authUser || !pending) return;
 
     setSaving(true);
@@ -498,7 +501,16 @@ await runTransaction(db, async (tx) => {
         e instanceof Error ? e.message : "Couldn’t save. Please try again.",
       );
     }
-  }
+  }, [
+    authUser,
+    confidence,
+    feedback,
+    flagged,
+    isLast,
+    pending,
+    q,
+    showFeedback,
+  ]);
 
   // --------- Render ----------
   const view = useMemo(() => {
@@ -814,6 +826,9 @@ await runTransaction(db, async (tx) => {
     flagged,
     feedback,
     showFeedback,
+    onNext,
+    onSelect,
+    onSubmit,
     saving,
     saveError,
     saveOk,

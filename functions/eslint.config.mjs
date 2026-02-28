@@ -1,7 +1,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
-export default [
+const config = [
   // Ignore built output if present
   {
     ignores: ["lib/**", "dist/**", "node_modules/**"],
@@ -27,3 +27,5 @@ export default [
     },
   },
 ];
+
+export default config;

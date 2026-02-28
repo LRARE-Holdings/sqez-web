@@ -9,6 +9,17 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2025-12-15.clover",
 });
 
+function resolveSiteUrl() {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (raw) return raw.replace(/\/+$/, "");
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Missing NEXT_PUBLIC_SITE_URL in production environment");
+  }
+
+  return "http://localhost:3000";
+}
+
 export async function POST(req: Request) {
   try {
     const authHeader = req.headers.get("authorization") || "";
@@ -79,8 +90,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const siteUrl =
-      process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    const siteUrl = resolveSiteUrl();
 
     // Return here after managing billing
     const returnUrl = `${siteUrl}/app/account`;

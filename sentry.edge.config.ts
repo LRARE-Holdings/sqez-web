@@ -5,16 +5,26 @@
 
 import * as Sentry from "@sentry/nextjs";
 
+const dsn = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN;
+
+function parseNumberEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return fallback;
+  return parsed;
+}
+
 Sentry.init({
-  dsn: "https://4a5c53f4cd052111f2f63cdb03627378@o4510856175812608.ingest.de.sentry.io/4510867740295248",
+  dsn,
+  enabled: Boolean(dsn),
 
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
-  tracesSampleRate: 1,
+  tracesSampleRate: parseNumberEnv("SENTRY_TRACES_SAMPLE_RATE", 0.1),
 
   // Enable logs to be sent to Sentry
   enableLogs: true,
 
   // Enable sending user PII (Personally Identifiable Information)
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
-  sendDefaultPii: true,
+  sendDefaultPii: process.env.SENTRY_SEND_DEFAULT_PII === "1",
 });

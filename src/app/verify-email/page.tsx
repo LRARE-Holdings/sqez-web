@@ -7,6 +7,21 @@ import { onAuthStateChanged, sendEmailVerification } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import { sanitizeNextPath } from "@/lib/navigation";
 
+type FirebaseErrorLike = {
+  code?: string;
+  message?: string;
+};
+
+function asFirebaseError(err: unknown): FirebaseErrorLike {
+  if (!err || typeof err !== "object") return {};
+  const code = "code" in err && typeof err.code === "string" ? err.code : undefined;
+  const message =
+    "message" in err && typeof err.message === "string"
+      ? err.message
+      : undefined;
+  return { code, message };
+}
+
 export default function VerifyEmailPage() {
   const router = useRouter();
   const params = useSearchParams();
@@ -18,6 +33,7 @@ export default function VerifyEmailPage() {
   >("checking");
   const [error, setError] = useState<string>("");
   const [cooldownUntil, setCooldownUntil] = useState<number>(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const autoSentRef = useRef(false);
 
@@ -45,8 +61,16 @@ export default function VerifyEmailPage() {
   }
 
   function startCooldown(ms: number) {
-    setCooldownUntil(Date.now() + ms);
+    const now = Date.now();
+    setNowMs(now);
+    setCooldownUntil(now + ms);
   }
+
+  useEffect(() => {
+    if (cooldownUntil <= nowMs) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [cooldownUntil, nowMs]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -79,10 +103,11 @@ export default function VerifyEmailPage() {
           await sendEmailVerification(user);
           markSentNow();
           setStatus("sent");
-        } catch (e: any) {
+        } catch (e: unknown) {
+          const parsed = asFirebaseError(e);
           console.error(e);
 
-          if (e?.code === "auth/too-many-requests") {
+          if (parsed.code === "auth/too-many-requests") {
             setError("Too many attempts. Please wait a minute, then tap “Resend email”.");
             startCooldown(60_000);
           }
@@ -110,8 +135,9 @@ export default function VerifyEmailPage() {
       await sendEmailVerification(user);
       markSentNow();
       setStatus("sent");
-    } catch (e: any) {
-      if (e?.code === "auth/too-many-requests") {
+    } catch (e: unknown) {
+      const parsed = asFirebaseError(e);
+      if (parsed.code === "auth/too-many-requests") {
         setStatus("needs-verify");
         setError("Too many attempts. Please wait a minute, then try again.");
         startCooldown(60_000);
@@ -119,7 +145,7 @@ export default function VerifyEmailPage() {
       }
       console.error(e);
       setStatus("error");
-      setError(e?.message || "Couldn’t send the email. Please try again.");
+      setError(parsed.message || "Couldn’t send the email. Please try again.");
     }
   }
 
@@ -137,10 +163,11 @@ export default function VerifyEmailPage() {
         setStatus("needs-verify");
         setError("Still not verified yet — try refreshing your inbox.");
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const parsed = asFirebaseError(e);
       console.error(e);
       setStatus("error");
-      setError(e?.message || "Couldn’t refresh status. Please try again.");
+      setError(parsed.message || "Couldn’t refresh status. Please try again.");
     }
   }
 
@@ -169,7 +196,7 @@ export default function VerifyEmailPage() {
             type="button"
             className="btn btn-outline w-full sm:w-auto"
             onClick={resend}
-            disabled={status === "sending" || Date.now() < cooldownUntil}
+            disabled={status === "sending" || nowMs < cooldownUntil}
           >
             {status === "sending" ? "Sending…" : "Resend email"}
           </button>

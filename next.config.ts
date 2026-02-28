@@ -5,7 +5,11 @@ const nextConfig: NextConfig = {
   /* config options here */
 };
 
-export default withSentryConfig(nextConfig, {
+const shouldEnableSentryBuildPlugin = Boolean(
+  process.env.CI && process.env.SENTRY_AUTH_TOKEN,
+);
+
+const sentryBuildConfig = withSentryConfig(nextConfig, {
   // For all available options, see:
   // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
@@ -42,3 +46,5 @@ export default withSentryConfig(nextConfig, {
     },
   }
 });
+
+export default shouldEnableSentryBuildPlugin ? sentryBuildConfig : nextConfig;

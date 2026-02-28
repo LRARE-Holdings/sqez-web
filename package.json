@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "lint:functions": "npm --prefix functions run lint",
+    "build:functions": "npm --prefix functions run build",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run lint && npm run typecheck && npm run lint:functions && npm run build:functions"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.5",

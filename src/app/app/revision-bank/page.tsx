@@ -7,7 +7,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase/client";
-import { fetchActiveQuestions } from "@/lib/questions/firestore";
+import { fetchQuestionsByIds } from "@/lib/questions/firestore";
 import type { FireQuestion } from "@/lib/questions/types";
 
 type BankFilter = "all" | "flagged" | "incorrect" | "lowConfidence";
@@ -39,9 +39,14 @@ function clamp(n: number, min: number, max: number) {
 function toDateMaybe(v: unknown): Date | null {
   if (!v) return null;
   // Firestore Timestamp
-  if (typeof v === "object" && v && "toDate" in v && typeof (v as any).toDate === "function") {
+  if (
+    typeof v === "object" &&
+    v &&
+    "toDate" in v &&
+    typeof v.toDate === "function"
+  ) {
     try {
-      return (v as any).toDate();
+      return v.toDate();
     } catch {
       return null;
     }
@@ -139,11 +144,7 @@ export default function RevisionBankPage() {
       setLoading(true);
 
       try {
-        // 1) Pull active question bank (for text + topic/module)
-        const active = await fetchActiveQuestions(2000);
-        if (cancelled) return;
-
-        // 2) Pull per-user questionStats
+        // 1) Pull per-user questionStats
         const statsRef = collection(db, "users", user.uid, "questionStats");
         // Try to orderBy updatedAt if present; if rules/indexes complain, fall back to unordered.
         let docs;
@@ -157,10 +158,24 @@ export default function RevisionBankPage() {
 
         const parsed: FireQuestionStat[] = docs.docs.map((d) => ({
           id: d.id,
-          ...(d.data() as any),
+          ...(d.data() as Record<string, unknown>),
         }));
 
-        setQuestions(active);
+        // 2) Hydrate question text only for IDs present in this user's stats.
+        const wantedQuestionIds = [
+          ...new Set(
+            parsed.map((s) =>
+              typeof s.questionId === "string" && s.questionId.trim()
+                ? s.questionId
+                : s.id,
+            ),
+          ),
+        ];
+
+        const hydrated = await fetchQuestionsByIds(wantedQuestionIds.slice(0, 1200));
+        if (cancelled) return;
+
+        setQuestions(hydrated);
         setStats(parsed);
         setLoading(false);
       } catch (e: unknown) {
@@ -190,9 +205,9 @@ export default function RevisionBankPage() {
         const qid = (s.questionId as string) || s.id;
         const q = questionById.get(qid);
 
-        const correctCount = Math.trunc(Number((s.correctCount as any) ?? 0) || 0);
-        const incorrectCount = Math.trunc(Number((s.incorrectCount as any) ?? 0) || 0);
-        const totalAttempts = Math.trunc(Number((s.totalAttempts as any) ?? 0) || 0);
+        const correctCount = Math.trunc(Number(s.correctCount ?? 0) || 0);
+        const incorrectCount = Math.trunc(Number(s.incorrectCount ?? 0) || 0);
+        const totalAttempts = Math.trunc(Number(s.totalAttempts ?? 0) || 0);
 
         const lastConfidenceRaw =
           s.lastConfidence === undefined || s.lastConfidence === null
@@ -207,13 +222,13 @@ export default function RevisionBankPage() {
         const flagged = Boolean(s.flagged ?? false);
 
         const lastSeen =
-          toDateMaybe((s as any).lastSeen) ??
-          toDateMaybe((s as any).updatedAt) ??
-          toDateMaybe((s as any).flaggedAt);
+          toDateMaybe((s as Record<string, unknown>).lastSeen) ??
+          toDateMaybe((s as Record<string, unknown>).updatedAt) ??
+          toDateMaybe((s as Record<string, unknown>).flaggedAt);
 
-        const module = (q?.module ?? s.module ?? "").toString();
+        const moduleName = (q?.module ?? s.module ?? "").toString();
         const topic = (q?.topic ?? s.topic ?? "").toString();
-        const subTopic = (q as any)?.subTopic ? String((q as any).subTopic) : "";
+        const subTopic = q?.subTopic ? String(q.subTopic) : "";
 
         const questionText = q?.question ?? "";
 
@@ -237,7 +252,7 @@ export default function RevisionBankPage() {
         return {
           id: qid,
           questionText,
-          module,
+          moduleName,
           topic,
           subTopic,
           correctCount,
@@ -258,8 +273,8 @@ export default function RevisionBankPage() {
       // still show it (but mark as unavailable).
       .filter((r) => {
         if (!needle) return true;
-        const hay =
-          `${r.questionText} ${r.topic} ${r.subTopic} ${r.module}`.toLowerCase();
+        const hay = `${r.questionText} ${r.topic} ${r.subTopic} ${r.moduleName}`
+          .toLowerCase();
         return hay.includes(needle);
       })
       .filter((r) => {
@@ -494,10 +509,10 @@ export default function RevisionBankPage() {
                     </div>
 
                     <div className="mt-2 text-xs text-white/60">
-                      {r.module || r.topic ? (
+                      {r.moduleName || r.topic ? (
                         <>
-                          {r.module ? <span>{r.module}</span> : null}
-                          {r.module && r.topic ? <span> • </span> : null}
+                          {r.moduleName ? <span>{r.moduleName}</span> : null}
+                          {r.moduleName && r.topic ? <span> • </span> : null}
                           {r.topic ? <span>{r.topic}</span> : null}
                           {r.subTopic ? <span> • {r.subTopic}</span> : null}
                         </>

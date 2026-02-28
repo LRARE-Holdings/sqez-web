@@ -4,6 +4,10 @@ import * as Sentry from "@sentry/nextjs";
 import Head from "next/head";
 import { useEffect, useState } from "react";
 
+const sentryExamplesEnabled =
+  process.env.NEXT_PUBLIC_ENABLE_SENTRY_EXAMPLES === "1" ||
+  process.env.NODE_ENV !== "production";
+
 class SentryExampleFrontendError extends Error {
   constructor(message: string | undefined) {
     super(message);
@@ -16,6 +20,7 @@ export default function Page() {
   const [isConnected, setIsConnected] = useState(true);
 
   useEffect(() => {
+    if (!sentryExamplesEnabled) return;
     Sentry.logger.info("Sentry example page loaded");
     async function checkConnectivity() {
       const result = await Sentry.diagnoseSdkConnectivity();
@@ -23,6 +28,16 @@ export default function Page() {
     }
     checkConnectivity();
   }, []);
+
+  if (!sentryExamplesEnabled) {
+    return (
+      <main className="mx-auto flex min-h-dvh w-full max-w-xl items-center justify-center px-6 py-10 text-center">
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-5 text-sm text-white/80">
+          This diagnostic page is disabled in production.
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div>

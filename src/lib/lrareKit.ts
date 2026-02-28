@@ -66,7 +66,7 @@ export const LRARE = {
     // Swift:
     // c = max(0, min(1, (confidence-1)/4))
     // r = max(0, min(1, rationaleChars/140))
-    let c = clamp((signal.confidence - 1.0) / 4.0, 0.0, 1.0);
+    const c = clamp((signal.confidence - 1.0) / 4.0, 0.0, 1.0);
     const r = clamp(signal.rationaleChars / 140.0, 0.0, 1.0);
 
     // Swift:

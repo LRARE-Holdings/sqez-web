@@ -9,8 +9,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2025-12-15.clover",
 });
 
-console.log("✅ webhook hit", new Date().toISOString());
-
 function formatDateForEmail(d: Date): string {
   try {
     return new Intl.DateTimeFormat("en-GB", {
@@ -24,7 +22,7 @@ function formatDateForEmail(d: Date): string {
 }
 
 async function resolveEmailForUser(params: {
-  userData: any;
+  userData: Record<string, unknown> | null;
   stripeCustomerId?: string;
   sessionEmail?: string;
 }): Promise<string | null> {
@@ -40,14 +38,15 @@ async function resolveEmailForUser(params: {
 
   try {
     const cust = await stripe.customers.retrieve(cid);
-    const email = (cust && typeof (cust as any).email === "string") ? String((cust as any).email).trim() : "";
+    const email =
+      !("deleted" in cust) && typeof cust.email === "string"
+        ? cust.email.trim()
+        : "";
     return email || null;
   } catch {
     return null;
   }
 }
-
-type Plan = "MONTHLY" | "ANNUAL";
 
 function tierForPlan(plan: string | undefined): string {
   const p = String(plan || "").trim().toUpperCase();
@@ -77,6 +76,16 @@ function extractUidPlanFromMetadata(meta: Stripe.Metadata | null | undefined) {
   return { uid, plan };
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function getString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
 export async function POST(req: Request) {
   const sig = req.headers.get("stripe-signature");
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -93,9 +102,10 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, secret);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "unknown";
     return NextResponse.json(
-      { error: `Webhook signature failed: ${err?.message || "unknown"}` },
+      { error: `Webhook signature failed: ${message}` },
       { status: 400 },
     );
   }
@@ -117,22 +127,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ received: true });
     }
 
-    const obj: any = event.data.object;
+    const obj = asRecord(event.data.object as unknown);
+    const customerDetails = asRecord(obj.customer_details);
+    const subscriptionDetails = asRecord(obj.subscription_details);
+    const objectMetadata = asRecord(obj.metadata) as Stripe.Metadata;
+    const subscriptionDetailsMetadata = asRecord(
+      subscriptionDetails.metadata,
+    ) as Stripe.Metadata;
 
     const sessionEmail: string | null =
       event.type === "checkout.session.completed"
-        ? (typeof obj?.customer_details?.email === "string" && obj.customer_details.email.trim()
-            ? obj.customer_details.email.trim()
-            : typeof obj?.customer_email === "string" && obj.customer_email.trim()
+        ? (typeof customerDetails.email === "string" && customerDetails.email.trim()
+            ? customerDetails.email.trim()
+            : typeof obj.customer_email === "string" && obj.customer_email.trim()
               ? obj.customer_email.trim()
               : null)
         : null;
 
     // 1) Try to resolve subscriptionId
     const subscriptionId: string | undefined =
-      typeof obj?.subscription === "string"
+      typeof obj.subscription === "string"
         ? obj.subscription
-        : event.type.startsWith("customer.subscription.") && typeof obj?.id === "string"
+        : event.type.startsWith("customer.subscription.") && typeof obj.id === "string"
           ? obj.id
           : undefined;
 
@@ -143,12 +159,12 @@ export async function POST(req: Request) {
     let uid: string | undefined;
     let plan: string | undefined;
 
-    const metaA = extractUidPlanFromMetadata(obj?.metadata);
+    const metaA = extractUidPlanFromMetadata(objectMetadata);
     uid = metaA.uid;
     plan = metaA.plan;
 
     if (!uid || !plan) {
-      const metaB = extractUidPlanFromMetadata(obj?.subscription_details?.metadata);
+      const metaB = extractUidPlanFromMetadata(subscriptionDetailsMetadata);
       uid = uid || metaB.uid;
       plan = plan || metaB.plan;
     }
@@ -168,7 +184,7 @@ export async function POST(req: Request) {
           uid = uid || metaSub.uid;
           plan = plan || metaSub.plan;
         }
-      } catch (e) {
+      } catch {
         // If Stripe retrieval fails, we can still proceed if uid exists,
         // but trial/status fields may be unavailable.
         sub = null;
@@ -183,10 +199,10 @@ export async function POST(req: Request) {
     const userRef = db.doc(`users/${uid}`);
 
     // Read current user doc once (needed for idempotent emails + firstName/email)
-    let userData: any = null;
+    let userData: Record<string, unknown> | null = null;
     try {
       const snap = await userRef.get();
-      userData = snap.exists ? (snap.data() as any) : null;
+      userData = snap.exists ? (snap.data() as Record<string, unknown>) : null;
     } catch {
       userData = null;
     }
@@ -208,8 +224,11 @@ export async function POST(req: Request) {
 
     const trialEndsAt = sub ? toDateFromUnixSeconds(sub.trial_end) : null;
 
-    // Stripe typings can lag behind API versions; access via `any` to avoid TS breakage.
-    const currentPeriodEnd = sub ? Number((sub as any).current_period_end) : null;
+    const currentPeriodEnd = sub
+      ? Number(
+          (sub as unknown as { current_period_end?: number }).current_period_end,
+        )
+      : null;
     const renewsAt = currentPeriodEnd ? toDateFromUnixSeconds(currentPeriodEnd) : null;
 
     const computedSubStatus = sub
@@ -222,29 +241,29 @@ export async function POST(req: Request) {
 
     // “lastTransactionID” best-effort
     const lastTxn =
-      (typeof obj?.id === "string" && obj.id) ||
-      (typeof obj?.payment_intent === "string" && obj.payment_intent) ||
-      (typeof obj?.latest_invoice === "string" && obj.latest_invoice) ||
-      (typeof obj?.invoice === "string" && obj.invoice) ||
+      getString(obj.id) ||
+      getString(obj.payment_intent) ||
+      getString(obj.latest_invoice) ||
+      getString(obj.invoice) ||
       event.id;
 
     // Stripe returns `customer` as either a string id or an expanded object.
     // Normalize to a string id for Firestore + portal lookups.
+    const objectCustomer = asRecord(obj.customer);
+
     const stripeCustomerId =
       (typeof sub?.customer === "string"
         ? sub.customer
-        : sub?.customer && typeof (sub.customer as any).id === "string"
-          ? String((sub.customer as any).id)
+        : sub?.customer && "id" in sub.customer && typeof sub.customer.id === "string"
+          ? sub.customer.id
           : undefined) ||
-      (typeof obj?.customer === "string"
+      (typeof obj.customer === "string"
         ? obj.customer
-        : obj?.customer && typeof obj.customer.id === "string"
-          ? String(obj.customer.id)
+        : typeof objectCustomer.id === "string"
+          ? objectCustomer.id
           : undefined) ||
       // Checkout session sometimes exposes customer id here
-      (typeof obj?.customer_details?.customer === "string"
-        ? obj.customer_details.customer
-        : undefined);
+      getString(customerDetails.customer);
 
     // 5) Write Firestore — single source of truth fields
     // - When entitled => isPro true
@@ -268,6 +287,18 @@ export async function POST(req: Request) {
 
       // If entitlement is lost, clear renewal date (even if we couldn't retrieve the subscription).
       if (!entitled) update.renewsAt = null;
+    }
+
+    if (
+      subscriptionId &&
+      stripeStatus &&
+      stripeStatus !== "incomplete" &&
+      stripeStatus !== "past_due"
+    ) {
+      update.stripePendingSubscriptionId = null;
+      update.stripePendingPlan = null;
+      update.stripePendingDiscountCode = null;
+      update.stripePendingUpdatedAt = null;
     }
 
     if (sub) {
@@ -334,10 +365,11 @@ export async function POST(req: Request) {
     await userRef.set(update, { merge: true });
 
     return NextResponse.json({ received: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Webhook handler failed";
     console.error("Webhook handler failed:", err);
     return NextResponse.json(
-      { error: err?.message ?? "Webhook handler failed" },
+      { error: message },
       { status: 500 },
     );
   }
