@@ -383,7 +383,7 @@ export default function AccountPage() {
       await openBillingPortal("/app/account");
     } catch (e) {
       console.error(e);
-      router.push("/app/upgrade");
+      router.push("/checkout");
     }
   }
 
@@ -650,7 +650,7 @@ export default function AccountPage() {
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               {!pro ? (
                 <Link
-                  href="/app/upgrade"
+                  href="/checkout"
                   className="btn btn-outline w-full sm:w-auto no-underline!"
                 >
                   Upgrade to Pro
@@ -670,7 +670,7 @@ export default function AccountPage() {
             <div className="mt-3 text-xs text-white/55">
               Manage billing opens the Stripe customer portal (hosted at
               pay.lrare.co.uk) when available. If it can’t be opened, you’ll be
-              routed to the upgrade page.
+              routed to checkout.
             </div>
           </div>
         </div>

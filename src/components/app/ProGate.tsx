@@ -11,6 +11,7 @@ type UserDoc = {
   isPro?: boolean;
   subscriptionTier?: string;
   betaUnlimited?: boolean;
+  stripeSubStatus?: string | null;
 };
 
 type GateState =
@@ -27,8 +28,6 @@ export function ProGate({ children }: { children: React.ReactNode }) {
   const allowWithoutPro = useMemo(() => {
     const p = pathname || "";
     return (
-      p.startsWith("/app/upgrade") ||
-      p.startsWith("/app/not-pro") ||
       p.startsWith("/app/account") ||
       p.startsWith("/app/app/account")
     );
@@ -63,7 +62,7 @@ export function ProGate({ children }: { children: React.ReactNode }) {
           // IMPORTANT:
           // Do NOT treat Firestore read failures as "not Pro".
           // During MFA / token refresh / transient rule issues, this can incorrectly
-          // bounce paid users to /app/not-pro.
+          // bounce paid users out of the app.
           console.error("ProGate snapshot error", err);
           setState({ kind: "error", user: u });
         },
@@ -83,14 +82,21 @@ export function ProGate({ children }: { children: React.ReactNode }) {
     if (state.kind !== "ready") return;
 
     const userDoc = state.doc;
+    const stripeSubStatus = String(userDoc?.stripeSubStatus || "")
+      .trim()
+      .toLowerCase();
 
-    // Single source of truth: users/{uid}.isPro
+    const stripeEntitled = stripeSubStatus
+      ? stripeSubStatus === "active"
+      : Boolean(userDoc?.isPro);
+
+    // Gate on an active Stripe status when present, with isPro as fallback for legacy docs.
     const isPro =
-      Boolean(userDoc?.isPro) ||
+      stripeEntitled ||
       Boolean(userDoc?.betaUnlimited);
 
     if (!isPro && !allowWithoutPro) {
-      router.replace("/app/not-pro");
+      router.replace("/checkout");
     }
   }, [state, allowWithoutPro, router]);
 

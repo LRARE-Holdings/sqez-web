@@ -19,12 +19,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const unsub = onAuthStateChanged(auth, (user) => {
       const nextUrl = encodeURIComponent(pathname || "/app");
 
-      // Allow the ProGate holding page through without further gates
-      if (pathname?.startsWith("/app/not-pro")) {
-        setGateReady(true);
-        return;
-      }
-
       if (!user) {
         router.replace(`/auth?next=${nextUrl}`);
         return;

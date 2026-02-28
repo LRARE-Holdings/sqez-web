@@ -15,9 +15,6 @@ import { writeOnboarding } from "@/lib/onboarding/firestore";
 const PRICE_MONTHLY = 14.99;
 const PRICE_ANNUAL = 99.99;
 
-const TRIAL_MONTHLY_DAYS = 14;
-const TRIAL_ANNUAL_DAYS = 30;
-
 function formatGBP(n: number) {
   return `£${n.toFixed(2)}`;
 }
@@ -32,7 +29,6 @@ function PlanOption({
   label,
   plan,
   recommended,
-  trialDays,
   primaryLine,
   secondaryLine,
   finePrint,
@@ -42,7 +38,6 @@ function PlanOption({
   label: string;
   plan: Plan;
   recommended: boolean;
-  trialDays: number;
   primaryLine: string;
   secondaryLine: string;
   finePrint: string;
@@ -76,9 +71,7 @@ function PlanOption({
           </div>
 
           <div className="mt-2 text-sm text-white/85">
-            <span className="font-semibold text-white">
-              Free trial — {trialDays} days
-            </span>
+            <span className="font-semibold text-white">Charged today</span>
             <span className="text-white/65"> · {primaryLine}</span>
           </div>
 
@@ -144,8 +137,18 @@ export default function PlanPage() {
     const unsub = onSnapshot(
       ref,
       (snap) => {
-        const data = snap.data() as { isPro?: boolean } | undefined;
-        const isPro = Boolean(data?.isPro);
+        const data = snap.data() as {
+          isPro?: boolean;
+          betaUnlimited?: boolean;
+          stripeSubStatus?: string | null;
+        } | undefined;
+        const stripeSubStatus = String(data?.stripeSubStatus || "")
+          .trim()
+          .toLowerCase();
+        const stripeEntitled = stripeSubStatus
+          ? stripeSubStatus === "active"
+          : Boolean(data?.isPro);
+        const isPro = stripeEntitled || Boolean(data?.betaUnlimited);
 
         if (isPro) {
           router.replace("/app");
@@ -190,7 +193,7 @@ export default function PlanPage() {
       } catch (e) {
         console.error("writeOnboarding(plan) failed", e);
       }
-      router.push(`/app/upgrade?plan=${plan}&source=onboarding`);
+      router.push(`/checkout?plan=${plan}&source=onboarding`);
       return;
     } catch (e) {
       console.error(e);
@@ -254,15 +257,15 @@ export default function PlanPage() {
               </div>
               <div className="mt-1 text-[11px] text-white/50">
                 {recommendedPlan === "MONTHLY"
-                  ? `Free trial — ${TRIAL_MONTHLY_DAYS} days`
-                  : `Free trial — ${TRIAL_ANNUAL_DAYS} days`}
+                  ? `${formatGBP(PRICE_MONTHLY)} / month`
+                  : `${formatGBP(PRICE_ANNUAL)} / year`}
               </div>
             </div>
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="chip">£0 today</span>
-                        <span className="chip">
+            <span className="chip">Charged today</span>
+            <span className="chip">
               {recommendedPlan === "MONTHLY"
                 ? `${formatGBP(PRICE_MONTHLY)} / month`
                 : `${formatGBP(PRICE_ANNUAL)} / year`}
@@ -277,10 +280,9 @@ export default function PlanPage() {
             label="Annual"
             plan="ANNUAL"
             recommended={recommendedPlan === "ANNUAL"}
-            trialDays={TRIAL_ANNUAL_DAYS}
             primaryLine={`${formatGBP(PRICE_ANNUAL)} / year`}
             secondaryLine={`≈ ${formatGBP(annualAsMonthly)}/month · Save ~${savingsPct}% vs monthly`}
-            finePrint={`After ${TRIAL_ANNUAL_DAYS} days, billed annually unless you cancel before the trial ends.`}
+            finePrint="Billed annually. Cancel anytime."
             disabled={loadingPlan !== null}
             onChoose={startCheckout}
           />
@@ -289,10 +291,9 @@ export default function PlanPage() {
             label="Monthly"
             plan="MONTHLY"
             recommended={recommendedPlan === "MONTHLY"}
-            trialDays={TRIAL_MONTHLY_DAYS}
             primaryLine={`${formatGBP(PRICE_MONTHLY)} / month`}
             secondaryLine="Maximum flexibility · Cancel any time"
-            finePrint={`After ${TRIAL_MONTHLY_DAYS} days, billed monthly unless you cancel before the trial ends.`}
+            finePrint="Billed monthly. Cancel anytime."
             disabled={loadingPlan !== null}
             onChoose={startCheckout}
           />
@@ -300,7 +301,7 @@ export default function PlanPage() {
 
         {/* Micro footer */}
         <div className="text-[11px] leading-relaxed text-white/50">
-          Checkout stays in-app with Stripe-secured card or wallet payment setup.{" "}
+          Checkout runs on a separate secure page with Stripe card or wallet payment.{" "}
           <Link href="https://lrare.co.uk/terms" className="underline underline-offset-2">
             Terms
           </Link>

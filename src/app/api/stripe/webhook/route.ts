@@ -72,9 +72,8 @@ function toDateFromUnixSeconds(sec: number | null | undefined): Date | null {
 }
 
 function isEntitledStripeStatus(status: string | null | undefined): boolean {
-  // Treat trialing + active as Pro.
-  // You may optionally include "past_due" if you want grace.
-  return status === "trialing" || status === "active";
+  // App access is granted only after a successful charge.
+  return status === "active";
 }
 
 function subStatusForStripeSubscription(sub: Stripe.Subscription): "trial" | "active" | "ended" {

@@ -27,12 +27,6 @@ function isPublicPath(pathname: string) {
   return false;
 }
 
-function isAppExemptPath(pathname: string) {
-  // Allow Stripe return confirmation page through even if onboarding isn't complete
-  if (pathname.startsWith("/app/upgrade")) return true;
-  return false;
-}
-
 export function OnboardingGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -43,10 +37,8 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
     // If you're on a public page, do not gate at all.
     if (isPublicPath(pathname)) return;
 
-    // For /app routes we require auth + onboardingCompleted (except upgrade page)
+    // For /app routes we require auth + onboardingCompleted
     if (!pathname.startsWith("/app")) return;
-
-    if (isAppExemptPath(pathname)) return;
 
     // IMPORTANT: manage the Firestore unsubscribe ourselves.
     // Returning a cleanup function from the onAuthStateChanged callback does NOT work.
@@ -100,7 +92,7 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
   }, [pathname, router]);
 
   // Only block rendering for gated /app routes (avoid blanking public pages)
-  const shouldGate = pathname.startsWith("/app") && !isAppExemptPath(pathname);
+  const shouldGate = pathname.startsWith("/app");
 
   if (!shouldGate) return <>{children}</>;
 

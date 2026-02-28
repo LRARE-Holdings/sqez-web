@@ -43,10 +43,6 @@ function priceIdForPlan(plan: Plan) {
   return process.env.STRIPE_PRICE_WEB_ANNUAL;
 }
 
-function trialDaysForPlan(plan: Plan): number {
-  return plan === "MONTHLY" ? 14 : 30;
-}
-
 function normalizeCode(code: unknown): string | null {
   if (typeof code !== "string") return null;
   const trimmed = code.trim();
@@ -265,7 +261,6 @@ export async function POST(req: Request) {
       );
     }
 
-    const trialDays = trialDaysForPlan(plan);
     const discountCode = normalizeCode(body.discountCode);
 
     const { customerId, userRef, userData } = await ensureCustomer(uid, email);
@@ -293,7 +288,6 @@ export async function POST(req: Request) {
           {
             customer: customerId,
             items: [{ price: priceId, quantity: 1 }],
-            trial_period_days: trialDays,
             payment_behavior: "default_incomplete",
             payment_settings: {
               save_default_payment_method: "on_subscription",
@@ -345,7 +339,6 @@ export async function POST(req: Request) {
       clientSecret: intent.clientSecret,
       intentType: intent.intentType,
       subscriptionId: subscription.id,
-      trialDays,
     });
   } catch (err: unknown) {
     const message =
