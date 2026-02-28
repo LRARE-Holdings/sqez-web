@@ -167,7 +167,9 @@ export default function BackgroundPage() {
             <button
               type="button"
               className="btn btn-primary flex-1"
-              onClick={next}
+              onClick={() => {
+                void next();
+              }}
               disabled={!canContinue}
             >
               Continue
