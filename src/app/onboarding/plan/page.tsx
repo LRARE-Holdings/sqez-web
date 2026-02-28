@@ -14,6 +14,8 @@ import { writeOnboarding } from "@/lib/onboarding/firestore";
 
 const PRICE_MONTHLY = 14.99;
 const PRICE_ANNUAL = 99.99;
+const TRIAL_MONTHLY_DAYS = 14;
+const TRIAL_ANNUAL_DAYS = 30;
 
 function formatGBP(n: number) {
   return `£${n.toFixed(2)}`;
@@ -29,6 +31,7 @@ function PlanOption({
   label,
   plan,
   recommended,
+  trialDays,
   primaryLine,
   secondaryLine,
   finePrint,
@@ -38,6 +41,7 @@ function PlanOption({
   label: string;
   plan: Plan;
   recommended: boolean;
+  trialDays: number;
   primaryLine: string;
   secondaryLine: string;
   finePrint: string;
@@ -71,7 +75,9 @@ function PlanOption({
           </div>
 
           <div className="mt-2 text-sm text-white/85">
-            <span className="font-semibold text-white">Charged today</span>
+            <span className="font-semibold text-white">
+              Free trial — {trialDays} days
+            </span>
             <span className="text-white/65"> · {primaryLine}</span>
           </div>
 
@@ -141,12 +147,14 @@ export default function PlanPage() {
           isPro?: boolean;
           betaUnlimited?: boolean;
           stripeSubStatus?: string | null;
+          stripeCardOnFile?: boolean;
         } | undefined;
         const stripeSubStatus = String(data?.stripeSubStatus || "")
           .trim()
           .toLowerCase();
+        const stripeCardOnFile = data?.stripeCardOnFile === true;
         const stripeEntitled = stripeSubStatus
-          ? stripeSubStatus === "active"
+          ? stripeSubStatus === "active" || (stripeSubStatus === "trialing" && stripeCardOnFile)
           : Boolean(data?.isPro);
         const isPro = stripeEntitled || Boolean(data?.betaUnlimited);
 
@@ -257,14 +265,14 @@ export default function PlanPage() {
               </div>
               <div className="mt-1 text-[11px] text-white/50">
                 {recommendedPlan === "MONTHLY"
-                  ? `${formatGBP(PRICE_MONTHLY)} / month`
-                  : `${formatGBP(PRICE_ANNUAL)} / year`}
+                  ? `Free trial — ${TRIAL_MONTHLY_DAYS} days`
+                  : `Free trial — ${TRIAL_ANNUAL_DAYS} days`}
               </div>
             </div>
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="chip">Charged today</span>
+            <span className="chip">£0 today</span>
             <span className="chip">
               {recommendedPlan === "MONTHLY"
                 ? `${formatGBP(PRICE_MONTHLY)} / month`
@@ -280,9 +288,10 @@ export default function PlanPage() {
             label="Annual"
             plan="ANNUAL"
             recommended={recommendedPlan === "ANNUAL"}
+            trialDays={TRIAL_ANNUAL_DAYS}
             primaryLine={`${formatGBP(PRICE_ANNUAL)} / year`}
             secondaryLine={`≈ ${formatGBP(annualAsMonthly)}/month · Save ~${savingsPct}% vs monthly`}
-            finePrint="Billed annually. Cancel anytime."
+            finePrint={`After ${TRIAL_ANNUAL_DAYS} days, billed annually unless you cancel before the trial ends.`}
             disabled={loadingPlan !== null}
             onChoose={startCheckout}
           />
@@ -291,9 +300,10 @@ export default function PlanPage() {
             label="Monthly"
             plan="MONTHLY"
             recommended={recommendedPlan === "MONTHLY"}
+            trialDays={TRIAL_MONTHLY_DAYS}
             primaryLine={`${formatGBP(PRICE_MONTHLY)} / month`}
             secondaryLine="Maximum flexibility · Cancel any time"
-            finePrint="Billed monthly. Cancel anytime."
+            finePrint={`After ${TRIAL_MONTHLY_DAYS} days, billed monthly unless you cancel before the trial ends.`}
             disabled={loadingPlan !== null}
             onChoose={startCheckout}
           />
@@ -301,7 +311,7 @@ export default function PlanPage() {
 
         {/* Micro footer */}
         <div className="text-[11px] leading-relaxed text-white/50">
-          Checkout runs on a separate secure page with Stripe card or wallet payment.{" "}
+          Checkout runs on a separate secure page with Stripe card or wallet payment setup.{" "}
           <Link href="https://lrare.co.uk/terms" className="underline underline-offset-2">
             Terms
           </Link>

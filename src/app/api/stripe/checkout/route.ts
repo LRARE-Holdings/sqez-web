@@ -43,6 +43,16 @@ function priceIdForPlan(plan: Plan) {
   return process.env.STRIPE_PRICE_WEB_ANNUAL;
 }
 
+function trialDaysForPlan(plan: Plan): number {
+  return plan === "MONTHLY" ? 14 : 30;
+}
+
+function hasSubscriptionDefaultPaymentMethod(sub: Stripe.Subscription): boolean {
+  const dpm = sub.default_payment_method;
+  if (typeof dpm === "string") return dpm.trim().length > 0;
+  return Boolean(dpm && typeof dpm === "object" && typeof dpm.id === "string" && dpm.id.trim());
+}
+
 function normalizeCode(code: unknown): string | null {
   if (typeof code !== "string") return null;
   const trimmed = code.trim();
@@ -204,11 +214,10 @@ async function getReusablePendingSubscription(args: {
     if (sub.metadata?.plan !== args.plan) return null;
 
     // Reuse only while still in pre-activation states.
-    const reusable = new Set<Stripe.Subscription.Status>([
-      "incomplete",
-      "past_due",
-    ]);
-    if (!reusable.has(sub.status)) return null;
+    const reusable = new Set<Stripe.Subscription.Status>(["incomplete", "past_due"]);
+    const canReuseTrialingWithoutCard =
+      sub.status === "trialing" && !hasSubscriptionDefaultPaymentMethod(sub);
+    if (!reusable.has(sub.status) && !canReuseTrialingWithoutCard) return null;
 
     return sub;
   } catch {
@@ -261,6 +270,7 @@ export async function POST(req: Request) {
       );
     }
 
+    const trialDays = trialDaysForPlan(plan);
     const discountCode = normalizeCode(body.discountCode);
 
     const { customerId, userRef, userData } = await ensureCustomer(uid, email);
@@ -288,6 +298,7 @@ export async function POST(req: Request) {
           {
             customer: customerId,
             items: [{ price: priceId, quantity: 1 }],
+            trial_period_days: trialDays,
             payment_behavior: "default_incomplete",
             payment_settings: {
               save_default_payment_method: "on_subscription",
@@ -339,6 +350,7 @@ export async function POST(req: Request) {
       clientSecret: intent.clientSecret,
       intentType: intent.intentType,
       subscriptionId: subscription.id,
+      trialDays,
     });
   } catch (err: unknown) {
     const message =

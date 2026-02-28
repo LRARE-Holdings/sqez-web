@@ -17,6 +17,7 @@ type CheckoutIntentResponse = {
   publishableKey?: string;
   clientSecret?: string;
   intentType?: "setup" | "payment";
+  trialDays?: number;
   error?: string;
 };
 
@@ -24,25 +25,29 @@ type CheckoutIntentData = {
   publishableKey: string;
   clientSecret: string;
   intentType: "setup" | "payment";
+  trialDays: number;
 };
 
 type UserEntitlementDoc = {
   isPro?: boolean;
   betaUnlimited?: boolean;
   stripeSubStatus?: string | null;
+  stripeCardOnFile?: boolean;
 };
 
 const PLAN_COPY: Record<
   Plan,
-  { label: string; price: string; note: string }
+  { label: string; trialDays: number; price: string; note: string }
 > = {
   MONTHLY: {
     label: "Monthly",
+    trialDays: 14,
     price: "£14.99 / month",
     note: "Maximum flexibility",
   },
   ANNUAL: {
     label: "Annual",
+    trialDays: 30,
     price: "£99.99 / year",
     note: "Best value",
   },
@@ -142,11 +147,11 @@ function CheckoutPaymentForm({
         disabled={!stripe || !elements || submitting}
         onClick={() => void handleConfirm()}
       >
-        {submitting ? "Processing…" : "Pay and unlock access"}
+        {submitting ? "Processing…" : `Start ${intent.trialDays}-day free trial`}
       </button>
 
       <div className="mt-3 text-xs text-white/55">
-        Card and supported wallets only. Your first charge is taken today.
+        Card details required now. No charge today.
       </div>
     </div>
   );
@@ -243,8 +248,9 @@ export default function CheckoutPage() {
           const stripeSubStatus = String(data?.stripeSubStatus || "")
             .trim()
             .toLowerCase();
+          const stripeCardOnFile = data?.stripeCardOnFile === true;
           const stripeEntitled = stripeSubStatus
-            ? stripeSubStatus === "active"
+            ? stripeSubStatus === "active" || (stripeSubStatus === "trialing" && stripeCardOnFile)
             : Boolean(data?.isPro);
           const isEntitled = stripeEntitled || Boolean(data?.betaUnlimited);
 
@@ -328,6 +334,10 @@ export default function CheckoutPage() {
         clientSecret: data.clientSecret,
         publishableKey: data.publishableKey,
         intentType: data.intentType,
+        trialDays:
+          typeof data.trialDays === "number"
+            ? data.trialDays
+            : PLAN_COPY[activePlan].trialDays,
       });
     } catch (err: unknown) {
       const message =
@@ -383,7 +393,7 @@ export default function CheckoutPage() {
               Secure checkout
             </h1>
             <p className="mt-2 text-sm text-white/75">
-              Pick your plan, add an optional code, then complete payment to unlock the app.
+              Pick your plan, add an optional code, then confirm your card to start your free trial.
             </p>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -416,7 +426,7 @@ export default function CheckoutPage() {
                       {PLAN_COPY[plan].price}
                     </div>
                     <div className="mt-1 text-xs text-white/60">
-                      Charged today. Cancel anytime.
+                      Free trial - {PLAN_COPY[plan].trialDays} days
                     </div>
                   </button>
                 );
@@ -473,7 +483,7 @@ export default function CheckoutPage() {
             ) : null}
 
             <div className="mt-4 text-xs text-white/55">
-              Entitlement is activated only after Stripe confirms successful payment.
+              Trial access activates only after Stripe confirms your payment method setup.
             </div>
           </>
         )}

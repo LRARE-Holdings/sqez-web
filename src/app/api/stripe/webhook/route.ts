@@ -71,9 +71,26 @@ function toDateFromUnixSeconds(sec: number | null | undefined): Date | null {
   return new Date(sec * 1000);
 }
 
-function isEntitledStripeStatus(status: string | null | undefined): boolean {
-  // App access is granted only after a successful charge.
-  return status === "active";
+function hasSubscriptionDefaultPaymentMethod(
+  sub: Stripe.Subscription | null,
+): boolean {
+  if (!sub) return false;
+  const dpm = sub.default_payment_method;
+  if (typeof dpm === "string") return dpm.trim().length > 0;
+  return Boolean(
+    dpm &&
+      typeof dpm === "object" &&
+      typeof dpm.id === "string" &&
+      dpm.id.trim(),
+  );
+}
+
+function isEntitledStripeStatus(
+  status: string | null | undefined,
+  hasCardOnFile: boolean,
+): boolean {
+  // Free-trial users can access only if card details are already attached.
+  return status === "active" || (status === "trialing" && hasCardOnFile);
 }
 
 function subStatusForStripeSubscription(sub: Stripe.Subscription): "trial" | "active" | "ended" {
@@ -233,7 +250,10 @@ export async function POST(req: Request) {
     // This avoids incorrect downgrades/upgrades caused by invoice/session statuses.
     const canMutateEntitlement = Boolean(stripeStatus);
 
-    const entitled = stripeStatus ? isEntitledStripeStatus(stripeStatus) : false;
+    const hasCardOnFile = hasSubscriptionDefaultPaymentMethod(sub);
+    const entitled = stripeStatus
+      ? isEntitledStripeStatus(stripeStatus, hasCardOnFile)
+      : false;
 
     const trialEndsAt = sub ? toDateFromUnixSeconds(sub.trial_end) : null;
 
@@ -290,6 +310,7 @@ export async function POST(req: Request) {
       stripeCustomerId: stripeCustomerId ?? null,
       stripeSubscriptionId: subscriptionId ?? null,
       stripeSubStatus: stripeStatus ?? null,
+      stripeCardOnFile: sub ? hasCardOnFile : null,
     };
 
     if (canMutateEntitlement) {
@@ -306,7 +327,8 @@ export async function POST(req: Request) {
       subscriptionId &&
       stripeStatus &&
       stripeStatus !== "incomplete" &&
-      stripeStatus !== "past_due"
+      stripeStatus !== "past_due" &&
+      !(stripeStatus === "trialing" && !hasCardOnFile)
     ) {
       update.stripePendingSubscriptionId = null;
       update.stripePendingPlan = null;

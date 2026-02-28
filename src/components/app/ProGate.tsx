@@ -12,6 +12,7 @@ type UserDoc = {
   subscriptionTier?: string;
   betaUnlimited?: boolean;
   stripeSubStatus?: string | null;
+  stripeCardOnFile?: boolean;
 };
 
 type GateState =
@@ -85,12 +86,13 @@ export function ProGate({ children }: { children: React.ReactNode }) {
     const stripeSubStatus = String(userDoc?.stripeSubStatus || "")
       .trim()
       .toLowerCase();
+    const stripeCardOnFile = userDoc?.stripeCardOnFile === true;
 
     const stripeEntitled = stripeSubStatus
-      ? stripeSubStatus === "active"
+      ? stripeSubStatus === "active" || (stripeSubStatus === "trialing" && stripeCardOnFile)
       : Boolean(userDoc?.isPro);
 
-    // Gate on an active Stripe status when present, with isPro as fallback for legacy docs.
+    // Gate on active or trialing-with-card Stripe state when present, with isPro fallback.
     const isPro =
       stripeEntitled ||
       Boolean(userDoc?.betaUnlimited);
