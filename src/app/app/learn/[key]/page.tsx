@@ -21,6 +21,7 @@ import {
 import { AppCard, AppCardSoft } from "@/components/ui/AppCard";
 import { subtopicsForTopicKey, subtopicsForTopicName } from "@/lib/catalog/subtopics";
 import { resolveTopicFromParam } from "@/lib/topicKeys";
+import { useExamReadyLock } from "@/lib/examReadyLock";
 
 type Difficulty = "ALL" | "Easy" | "Medium" | "Hard";
 type Mode = "quickfire" | "revise";
@@ -111,6 +112,7 @@ export default function TopicDetailPage({
   const [count, setCount] = useState<number>(10);
   const [difficulty, setDifficulty] = useState<Difficulty>("ALL");
   const [selectedSubtopics, setSelectedSubtopics] = useState<string[]>([]);
+  const examReady = useExamReadyLock();
 
   // Resolve params.key safely (Next 16 dynamic params are async)
   useEffect(() => {
@@ -188,6 +190,9 @@ export default function TopicDetailPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subtopics]);
 
+  const topicExamReady = topic ? Boolean(examReady.byTopic[topic.key]?.locked) : false;
+  const practiceLocked = examReady.mode === "enforce" && topicExamReady;
+
 
   function toggleSubtopic(s: string) {
     setSelectedSubtopics((prev) =>
@@ -197,6 +202,7 @@ export default function TopicDetailPage({
 
   function start() {
     if (!topic) return;
+    if (practiceLocked) return;
 
     const base =
       mode === "revise" ? "/app/revise" : "/app/session";
@@ -260,6 +266,43 @@ export default function TopicDetailPage({
         title="Study this topic"
         subtitle="Choose how you want to practise. You’re always in control."
       >
+        {topicExamReady ? (
+          <div className="mb-4 rounded-2xl border border-emerald-200/25 bg-emerald-200/10 px-4 py-3 text-sm text-emerald-50">
+            This topic is currently marked exam-ready.
+            {practiceLocked
+              ? " Practice is locked by default."
+              : " Locking is currently in observe mode."}
+          </div>
+        ) : null}
+
+        {practiceLocked && topic ? (
+          <div className="mb-4 rounded-2xl border border-amber-200/25 bg-amber-200/10 px-4 py-3">
+            <div className="text-sm font-semibold text-amber-50">
+              Practice locked
+            </div>
+            <div className="mt-1 text-xs text-amber-50/85">
+              You can still review notes, statutes, and cases. Use a one-session
+              unlock if you need to drill this topic now.
+            </div>
+            <div className="mt-3">
+              <button
+                type="button"
+                className="btn btn-outline no-underline!"
+                onClick={() => {
+                  if (!topic) return;
+                  examReady.setTopicOverride(topic.key);
+                  const q = new URLSearchParams();
+                  q.set("topic", topic.key);
+                  q.set("unlock", "1");
+                  router.push(`/app/session?${q.toString()}`);
+                }}
+              >
+                Unlock for this session
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid gap-6 lg:grid-cols-12">
           {/* Left: mode + options */}
           <div className="lg:col-span-7">
@@ -372,18 +415,30 @@ export default function TopicDetailPage({
                   type="button"
                   className="btn btn-primary w-full sm:w-auto no-underline!"
                   onClick={start}
+                  disabled={practiceLocked}
                 >
                   <Zap className="mr-2 h-4 w-4" />
-                  Start session
+                  {practiceLocked ? "Locked" : "Start session"}
                 </button>
 
-                <Link
-                  href={`/app/revise?topic=${encodeURIComponent(topic.key)}`}
-                  className="btn btn-outline w-full sm:w-auto no-underline!"
-                >
-                  <Layers className="mr-2 h-4 w-4" />
-                  Revise
-                </Link>
+                {practiceLocked ? (
+                  <button
+                    type="button"
+                    className="btn btn-outline w-full sm:w-auto"
+                    disabled
+                  >
+                    <Layers className="mr-2 h-4 w-4" />
+                    Revise locked
+                  </button>
+                ) : (
+                  <Link
+                    href={`/app/revise?topic=${encodeURIComponent(topic.key)}`}
+                    className="btn btn-outline w-full sm:w-auto no-underline!"
+                  >
+                    <Layers className="mr-2 h-4 w-4" />
+                    Revise
+                  </Link>
+                )}
               </div>
             </div>
           </div>

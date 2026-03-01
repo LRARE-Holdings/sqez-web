@@ -172,3 +172,84 @@ a:hover {
 .divider {
   @apply h-px w-full bg-zinc-800/70;
 }
+
+/* Trusted-by marquee */
+.trusted-marquee {
+  overflow: hidden;
+  border-radius: var(--sqez-radius-xl);
+  border: 1px solid var(--sqez-border-soft);
+  background: var(--sqez-surface-2);
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 5%,
+    black 95%,
+    transparent 100%
+  );
+}
+
+.trusted-track {
+  display: flex;
+  width: max-content;
+  animation: trusted-scroll 34s linear infinite;
+}
+
+.trusted-group {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.trusted-marquee:hover .trusted-track {
+  animation-play-state: paused;
+}
+
+.trusted-logo {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 13rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--sqez-radius-md);
+  border: 1px solid rgba(234, 234, 234, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.75rem 1.15rem;
+}
+
+.trusted-logo img {
+  display: block;
+  height: 1.9rem;
+  width: auto;
+  max-width: 100%;
+}
+
+@keyframes trusted-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 640px) {
+  .trusted-group {
+    gap: 0.6rem;
+    padding: 0.6rem;
+  }
+
+  .trusted-logo {
+    min-width: 11.5rem;
+    padding: 0.65rem 0.95rem;
+  }
+
+  .trusted-logo img {
+    height: 1.6rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trusted-track {
+    animation: none;
+  }
+}

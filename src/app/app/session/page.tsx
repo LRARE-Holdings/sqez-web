@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import {
@@ -14,6 +14,8 @@ import {
 
 import { auth, db } from "@/lib/firebase/client";
 import { byKey, byTitle } from "@/lib/topicCatalog";
+import { canonicalTopicKey } from "@/lib/topicKeys";
+import { logExamReadyEvent, useExamReadyLock } from "@/lib/examReadyLock";
 import {
   fetchActiveQuestions,
   fetchActiveQuestionsByTopic,
@@ -67,10 +69,19 @@ function isYesterdayUTC(prev: Date, now: Date) {
 }
 
 export default function SessionPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const topicParam = searchParams.get("topic");
   const modeParam = searchParams.get("mode"); // "revise" | "revision" | null
   const idsParam = searchParams.get("ids"); // comma-separated questionIds for revision sessions
+  const unlockParam = searchParams.get("unlock");
+  const examReady = useExamReadyLock();
+  const lockReady = examReady.ready;
+  const lockMode = examReady.mode;
+  const lockByTopic = examReady.byTopic;
+  const lockTopicKeys = examReady.lockedTopicKeys;
+  const consumeTopicOverride = examReady.consumeTopicOverride;
+  const setTopicOverride = examReady.setTopicOverride;
 
   // Auth state
   const [authReady, setAuthReady] = useState(false);
@@ -80,6 +91,10 @@ export default function SessionPage() {
   const [questions, setQuestions] = useState<FireQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [lockedTopic, setLockedTopic] = useState<{
+    key: string;
+    title: string;
+  } | null>(null);
 
   // Session state
   const [pool, setPool] = useState<string[]>([]);
@@ -116,6 +131,7 @@ export default function SessionPage() {
 
     async function run() {
       setLoadError(null);
+      setLockedTopic(null);
 
       if (!authReady) {
         setLoading(true);
@@ -124,6 +140,11 @@ export default function SessionPage() {
 
       if (!authUser) {
         setLoading(false);
+        return;
+      }
+
+      if (!lockReady) {
+        setLoading(true);
         return;
       }
 
@@ -140,6 +161,52 @@ export default function SessionPage() {
           : undefined;
 
         const wantedTitle = topicMeta?.title ?? decoded ?? null;
+        const topicKey = topicMeta?.key ?? canonicalTopicKey(decoded);
+        const topicStatus = topicKey ? lockByTopic[topicKey] : undefined;
+        const topicIsExamReady = Boolean(topicStatus?.locked);
+        const topicTitle = topicMeta?.title ?? decoded ?? topicKey ?? "this topic";
+
+        if (topicKey && topicIsExamReady) {
+          if (lockMode === "observe") {
+            logExamReadyEvent("lock_would_block", {
+              scope: "session_topic",
+              topicKey,
+              route: "session",
+            });
+          } else {
+            const unlockRequested = unlockParam === "1";
+            let unlocked = false;
+
+            if (unlockRequested) {
+              unlocked = consumeTopicOverride(topicKey);
+              if (unlocked) {
+                logExamReadyEvent("lock_override_used", {
+                  topicKey,
+                  route: "session",
+                });
+              }
+            }
+
+            if (!unlocked) {
+              logExamReadyEvent("lock_blocked", {
+                scope: "session_topic",
+                topicKey,
+                route: "session",
+              });
+
+              setQuestions([]);
+              setPool([]);
+              setPoolIndex(0);
+              setPhase("question");
+              setSelected(null);
+              setPending(null);
+              setLockedTopic({ key: topicKey, title: topicTitle });
+              setLoading(false);
+              return;
+            }
+          }
+        }
+
         const isRevisionMode = modeParam === "revise" || modeParam === "revision";
 
         // Pool selection:
@@ -189,6 +256,29 @@ export default function SessionPage() {
           ids = loadedQuestions.map((qq) => qq.questionId);
         }
 
+        if (ids.length === 0 && !wantedTitle) {
+          const unlockedOnly = loadedQuestions.filter((qq) => {
+            const qTopicKey = canonicalTopicKey(qq.topic);
+            if (!qTopicKey) return true;
+            return !lockTopicKeys.has(qTopicKey);
+          });
+
+          if (
+            lockMode === "observe" &&
+            unlockedOnly.length < loadedQuestions.length
+          ) {
+            logExamReadyEvent("lock_would_block", {
+              scope: "session_untargeted",
+              wouldExclude: loadedQuestions.length - unlockedOnly.length,
+              route: "session",
+            });
+          }
+
+          if (lockMode === "enforce") {
+            loadedQuestions = unlockedOnly;
+          }
+        }
+
         setQuestions(loadedQuestions);
 
         // Default pool
@@ -219,7 +309,19 @@ export default function SessionPage() {
     return () => {
       cancelled = true;
     };
-  }, [topicParam, modeParam, idsParam, authReady, authUser]);
+  }, [
+    topicParam,
+    modeParam,
+    idsParam,
+    unlockParam,
+    authReady,
+    authUser,
+    lockReady,
+    lockMode,
+    lockByTopic,
+    lockTopicKeys,
+    consumeTopicOverride,
+  ]);
 
   // --------- Derived current question ----------
   const currentId = pool[poolIndex];
@@ -569,6 +671,44 @@ await runTransaction(db, async (tx) => {
       );
     }
 
+    if (lockedTopic) {
+      return (
+        <div className="card">
+          <div className="text-sm font-semibold text-white">
+            Practice locked for this topic
+          </div>
+          <div className="mt-2 text-sm text-white/70">
+            <span className="text-white/90">{lockedTopic.title}</span> is
+            currently exam-ready. You can still browse notes, statutes, and
+            cases for this topic.
+          </div>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              className="btn btn-primary w-full sm:w-auto"
+              onClick={() => {
+                const ok = setTopicOverride(lockedTopic.key);
+                if (!ok) {
+                  setLoadError("Couldn’t unlock this topic for a session.");
+                  return;
+                }
+                const q = new URLSearchParams();
+                q.set("topic", lockedTopic.key);
+                q.set("unlock", "1");
+                router.replace(`/app/session?${q.toString()}`);
+              }}
+            >
+              Unlock for this session
+            </button>
+
+            <Link href="/app/learn" className="btn btn-outline w-full sm:w-auto">
+              Back to Learn
+            </Link>
+          </div>
+        </div>
+      );
+    }
+
     if (!q) {
       return (
         <div className="card">
@@ -832,6 +972,9 @@ await runTransaction(db, async (tx) => {
     saving,
     saveError,
     saveOk,
+    lockedTopic,
+    setTopicOverride,
+    router,
   ]);
 
   return <div className="grid gap-6">{view}</div>;

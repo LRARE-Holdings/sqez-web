@@ -8,6 +8,7 @@ import { AppCard } from "@/components/ui/AppCard";
 import { allTopics, type Topic } from "@/lib/topicCatalog";
 import { getItemMetas } from "@/lib/engineStore";
 import { canonicalTopicKey } from "@/lib/topicKeys";
+import { useExamReadyLock } from "@/lib/examReadyLock";
 
 type ModuleFilter = "ALL" | "FLK1" | "FLK2";
 
@@ -127,12 +128,22 @@ function DueBadge({ due }: { due: number }) {
   );
 }
 
+function ExamReadyBadge({ locked }: { locked: boolean }) {
+  if (!locked) return null;
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200/25 bg-emerald-200/10 px-3 py-1.5 text-xs text-emerald-50">
+      Exam-ready
+    </span>
+  );
+}
+
 export default function LearnPage() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ModuleFilter>("ALL");
   const [readinessByKey, setReadinessByKey] = useState<
     Record<string, TopicReadiness>
   >({});
+  const examReady = useExamReadyLock();
 
   useEffect(() => {
     setReadinessByKey(buildReadinessMap());
@@ -223,6 +234,10 @@ export default function LearnPage() {
         {ordered.map((t) => {
           const r = readinessByKey[t.key];
           const due = r?.dueNow ?? 0;
+          const topicLock = examReady.byTopic[t.key];
+          const topicExamReady = Boolean(topicLock?.locked);
+          const practiceLocked =
+            examReady.mode === "enforce" && topicExamReady;
 
           return (
             <Link
@@ -236,9 +251,18 @@ export default function LearnPage() {
                     {t.title}
                   </div>
                   <div className="mt-1 text-xs text-white/60">{t.module}</div>
+                  {practiceLocked ? (
+                    <div className="mt-2 text-xs text-amber-100/90">
+                      Practice is locked for now. Open topic to unlock for one
+                      session.
+                    </div>
+                  ) : null}
                 </div>
 
-                <DueBadge due={due} />
+                <div className="flex flex-col items-end gap-2">
+                  <ExamReadyBadge locked={topicExamReady} />
+                  <DueBadge due={due} />
+                </div>
               </div>
 
               <div className="mt-3 text-sm leading-relaxed text-white/75">

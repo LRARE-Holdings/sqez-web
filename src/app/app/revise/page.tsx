@@ -13,6 +13,8 @@ import {
 } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase/client";
+import { canonicalTopicKey } from "@/lib/topicKeys";
+import { logExamReadyEvent, useExamReadyLock } from "@/lib/examReadyLock";
 
 type Focus = "failed" | "lowConfidence" | "flagged" | "mixed";
 type TimeRange = "7" | "30" | "all";
@@ -96,6 +98,7 @@ function timeRangeTitle(t: TimeRange) {
 
 export default function RevisePage() {
   const router = useRouter();
+  const examReady = useExamReadyLock();
 
   // Auth
   const [authReady, setAuthReady] = useState(false);
@@ -165,8 +168,10 @@ export default function RevisePage() {
     cap: number;
     focus: Focus;
     timeRange: TimeRange;
+    mode: "observe" | "enforce";
+    lockedTopicKeys: Set<string>;
   }): Promise<string[]> {
-    const { uid, cap, focus, timeRange } = args;
+    const { uid, cap, focus, timeRange, mode, lockedTopicKeys } = args;
 
     const snap = await getDocs(collection(db, "users", uid, "questionStats"));
 
@@ -193,6 +198,7 @@ export default function RevisePage() {
       return {
         id,
         stat: s,
+        topicKey: canonicalTopicKey(s.topic),
         lastSeenMs,
         acc: accuracyOf(s),
       };
@@ -225,10 +231,25 @@ export default function RevisePage() {
       return wasIncorrect || lowConf || flagged;
     });
 
+    const unlockedOnly = passesFocus.filter((x) => {
+      if (!x.topicKey) return true;
+      return !lockedTopicKeys.has(x.topicKey);
+    });
+
+    if (mode === "observe" && unlockedOnly.length < passesFocus.length) {
+      logExamReadyEvent("lock_would_block", {
+        scope: "revise",
+        wouldExclude: passesFocus.length - unlockedOnly.length,
+        route: "revise",
+      });
+    }
+
+    const target = mode === "enforce" ? unlockedOnly : passesFocus;
+
     // “Weakest first”:
     // - lowest accuracy first
     // - tie-breaker: oldest lastSeen first (stale gets priority)
-    const sorted = passesFocus.sort((a, b) => {
+    const sorted = target.sort((a, b) => {
       if (a.acc !== b.acc) return a.acc - b.acc;
       const aSeen = a.lastSeenMs ?? 0;
       const bSeen = b.lastSeenMs ?? 0;
@@ -241,6 +262,10 @@ export default function RevisePage() {
 
   async function startRevision(cap: number) {
     if (!authUser) return;
+    if (!examReady.ready) {
+      setErr("Preparing topic readiness… please try again.");
+      return;
+    }
     setBusy(true);
     setErr(null);
     setNoBank(false);
@@ -251,6 +276,8 @@ export default function RevisePage() {
         cap,
         focus,
         timeRange,
+        mode: examReady.mode,
+        lockedTopicKeys: examReady.lockedTopicKeys,
       });
 
       if (ids.length <= 0) {
@@ -438,7 +465,7 @@ export default function RevisePage() {
               }
               void startRevision(Math.trunc(questionCount));
             }}
-            disabled={busy}
+            disabled={busy || !examReady.ready}
           >
             {busy
               ? "Starting…"
@@ -491,7 +518,7 @@ export default function RevisePage() {
                 }
                 void startRevision(x.cap);
               }}
-              disabled={busy}
+              disabled={busy || !examReady.ready}
             >
               <div className="flex items-start gap-3">
                 <div className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/85">
