@@ -49,6 +49,11 @@ const TRUSTED_INSTITUTIONS = [
     logo: "/institutions/kings-college-london.svg",
     width: 360,
   },
+      {
+    name: "The University of Law",
+    logo: "/institutions/uni-of-law.svg",
+    width: 360,
+  },
 ] as const;
 
 function Divider() {
